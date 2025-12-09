@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/google-api/:match*",
+      "destination": "https://generativelanguage.googleapis.com/:match*"
+    }
+  ]
+}

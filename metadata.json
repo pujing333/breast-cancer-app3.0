@@ -1,0 +1,5 @@
+{
+  "name": "BreastCare Assistant",
+  "description": "专为乳腺外科医生设计的移动端辅助工具。提供患者管理、智能辅助治疗方案制定（基于CSCO/NCCN指南）、治疗日程记录与提醒功能。",
+  "requestFramePermissions": []
+}
