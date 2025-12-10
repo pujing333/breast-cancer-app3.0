@@ -26,10 +26,17 @@ return 0; // N0
 // 解析组织学分级 (1, 2, 3)
 const getGrade = (gradeStr: string): number => {
     if (!gradeStr) return 0;
-    if (gradeStr.includes('G3')) return 3;
-    if (gradeStr.includes('G2')) return 2;
-    if (gradeStr.includes('G1')) return 1;
+    if (gradeStr.includes('G3') || gradeStr.includes('3')) return 3;
+    if (gradeStr.includes('G2') || gradeStr.includes('2')) return 2;
+    if (gradeStr.includes('G1') || gradeStr.includes('1')) return 1;
     return 0; 
+};
+
+// 解析 Ki67 (%)
+const getKi67 = (ki67Str: string): number => {
+    if (!ki67Str) return 0;
+    const val = parseFloat(ki67Str.replace(/[^\d.]/g, ''));
+    return isNaN(val) ? 0 : val;
 };
 
 // 解析21基因RS评分
@@ -46,6 +53,7 @@ const options: TreatmentOption[] = [];
 const tSize = getTumorSize(markers.tumorSize);
 const nStage = getNodeStage(markers.nodeStatus);
 const grade = getGrade(markers.histologicalGrade);
+const ki67 = getKi67(markers.ki67);
 const subtype = patient.subtype;
 const rsScore = getRSScore(markers.geneticTestResult);
 
@@ -78,49 +86,50 @@ if (isLuminal && nStage === 0) {
             waiverReason = `RS评分为 ${rsScore} (<26)，根据TAILORx研究，获益于化疗的可能性极低。`;
         }
     } else {
-        // 无基因检测结果
-        if (tSize <= 1.0 && grade <= 2) { // T1a/b + 非G3
+        // 无基因检测结果，依据临床病理特征
+        // 极低危：T <= 1cm (T1a/b) 且 N0 且非 G3 且 Ki67不高
+        if (tSize <= 1.0 && grade <= 2 && ki67 < 30) {
             canWaiveChemo = true; 
-            waiverReason = "肿瘤≤1cm，淋巴结阴性且分级较低，临床极低危，通常无需化疗。";
-        } else if (subtype === MolecularSubtype.LuminalA && grade <= 1) {
-            // Luminal A G1 N0
+            waiverReason = "肿瘤≤1cm (T1a/b)，淋巴结阴性，分级较低，且Ki-67未见高表达，临床极低危，通常无需化疗。";
+        } else if (subtype === MolecularSubtype.LuminalA && grade === 1 && ki67 < 15) {
+            // 典型 Luminal A
             canWaiveChemo = true; 
-            waiverReason = "Luminal A型 (G1) N0 患者，临床低危。建议进行21基因检测确认。";
+            waiverReason = "典型 Luminal A型 (G1, Ki-67<15%) N0 患者，临床低危，化疗获益不明确。建议进行21基因检测确认。";
         } else {
-            // Luminal B N0 或 G2/G3 -> 提示检测
-            waiverReason = "Luminal型 N0 患者，若21基因RS评分低可豁免化疗。建议完善检测。";
-            canWaiveChemo = true; 
+            // 其他 Luminal N0 患者 (如 G2, Ki67 20-30%) -> 灰色地带
+            waiverReason = "Luminal型 N0 患者，若21基因RS评分低可豁免化疗。建议完善基因检测以辅助决策。";
+            canWaiveChemo = true; // 作为一个选项提供，但不一定推荐
         }
     }
 }
 
 // --- 方案构建 ---
 
-// 方案 A: 新辅助治疗 (优先推荐给符合指征的高危人群)
+// 方案 A: 新辅助治疗
 const neoadjuvantOption: TreatmentOption = {
     id: 'path_neoadjuvant',
     title: '新辅助治疗 → 手术 → 辅助治疗',
     iconType: 'chemo',
-    description: '术前进行药物治疗(化疗/靶向/免疫)。目标：肿瘤降期提高保乳率，获取体内药敏信息(pCR)，指导术后强化治疗。',
+    description: '术前进行药物治疗。适用于HER2阳性或三阴性且肿瘤负荷较大(>2cm或N+)的患者，或局部晚期Luminal型。',
     duration: '6-8个月(术前) + 手术 + 术后',
-    pros: ['直观评价药物敏感性', '部分患者可实现pCR(病理完全缓解)', '降期手术'],
+    pros: ['直观评价药物敏感性', '可能实现pCR(病理完全缓解)', '降期利于保乳'],
     cons: ['治疗周期较长', '需穿刺确诊病理'],
     recommended: false
 };
 
-// 方案 B: 手术优先 (优先推荐给早期或Luminal型)
+// 方案 B: 手术优先
 const surgeryOption: TreatmentOption = {
     id: 'path_surgery',
     title: '手术 → 辅助治疗',
     iconType: 'surgery',
-    description: '先行手术切除病灶(保乳或全切)，根据术后大病理结果精准制定后续化疗、放疗及内分泌方案。',
+    description: '先行手术切除病灶，根据术后大病理(包括准确的T, N, Grade, Ki67)制定后续化疗、放疗及内分泌方案。',
     duration: '1个月(手术恢复) + 4-6个月(化疗) + 5-10年(内分泌)',
-    pros: ['迅速去除负荷', '精准TNM分期'],
-    cons: ['无法获取pCR信息'],
+    pros: ['迅速去除肿瘤负荷', '获取精准TNM分期'],
+    cons: ['无法获取体内药敏信息(pCR)'],
     recommended: false
 };
 
-// 方案 C: 豁免化疗 (仅针对低危 Luminal A/B)
+// 方案 C: 豁免化疗
 const conservativeOption: TreatmentOption = {
     id: 'path_conservative',
     title: '手术 → 单纯内分泌 (豁免化疗)',
@@ -135,10 +144,16 @@ const conservativeOption: TreatmentOption = {
 // --- 推荐打标 ---
 if (needNeoadjuvant || luminalNeoadjuvant) {
     neoadjuvantOption.recommended = true;
+    // 如果是极高危，手术优先可能不合适，但还是列出
     options.push(neoadjuvantOption, surgeryOption);
-} else if (canWaiveChemo) {
+} else if (canWaiveChemo && rsScore !== null && rsScore < 26) {
+    // 明确 RS < 26，首推豁免
     conservativeOption.recommended = true;
-    options.push(conservativeOption, surgeryOption); // 豁免方案排第一
+    options.push(conservativeOption, surgeryOption);
+} else if (canWaiveChemo) {
+    // 临床低危但无 RS，豁免作为推荐之一，但手术优先（去化疗需谨慎）也是主要路径
+    surgeryOption.recommended = true; // 默认稳妥
+    options.push(surgeryOption, conservativeOption); 
 } else {
     surgeryOption.recommended = true;
     options.push(surgeryOption, neoadjuvantOption);
@@ -163,7 +178,7 @@ highLevelPlan: TreatmentOption
 const tSize = getTumorSize(markers.tumorSize);
 const nStage = getNodeStage(markers.nodeStatus);
 const grade = getGrade(markers.histologicalGrade);
-const ki67Val = parseFloat(markers.ki67) || 0;
+const ki67Val = getKi67(markers.ki67);
 const isMeno = markers.menopause; // true=绝经后
 
 const subtype = patient.subtype;
@@ -206,7 +221,7 @@ if (!isConservativePath) {
             cycle: '每2-3周1次，共8周期',
             type: 'chemo',
             recommended: false, 
-            reasoning: '经典含蒽环方案，适用于极高危患者，但需注意心脏毒性叠加风险。',
+            reasoning: '经典含蒽环方案，适用于极高危患者(N+多)，但需注意心脏毒性叠加风险。',
             totalCycles: 8,
             frequencyDays: 14, // 密集型AC
             drugs: [
@@ -277,9 +292,16 @@ if (!isConservativePath) {
     
     // 3. Luminal型化疗
     else if (isLuminal) {
-        // 高危: N2+ 或 (N1且(G3或高Ki67))
-        const isHighRisk = nStage >= 2 || (nStage >= 1 && (ki67Val >= 20 || grade === 3));
+        // --- 高危判定 (High Risk) ---
+        // 定义：淋巴结 N2+ (≥4个)
+        // 或者：淋巴结 N1 (1-3个) 且 (G3 或 Ki67>=20% 或 T>5cm)
+        const isHighRisk = nStage >= 2 || (nStage === 1 && (ki67Val >= 20 || grade === 3 || tSize >= 5));
         
+        // --- 中危判定 (Intermediate Risk) ---
+        // 定义：淋巴结 N1 但 G1/2, Ki67低
+        // 或者：N0 但有高危因素 (T>2cm, G3, Ki67>30%)
+        const isIntermediateRisk = (nStage === 1 && !isHighRisk) || (nStage === 0 && (tSize > 2.0 || grade === 3 || ki67Val >= 30));
+
         plan.chemoOptions.push({
             id: 'c_act_lum',
             name: 'AC-T 方案',
@@ -287,7 +309,9 @@ if (!isConservativePath) {
             cycle: '8周期',
             type: 'chemo',
             recommended: isHighRisk,
-            reasoning: isHighRisk ? '淋巴结转移较多或分级/增殖指数高(G3/Ki67高)，属于高危复发人群，需强效化疗。' : '备选方案。',
+            reasoning: isHighRisk 
+                ? `患者存在高危因素 (N${nStage}, G${grade}, Ki67 ${ki67Val}%)，复发风险较高，推荐包含蒽环和紫杉类的强效方案。` 
+                : '强度较大，仅作为高危患者的备选。',
             totalCycles: 8,
             frequencyDays: 21,
             drugs: [
@@ -297,15 +321,16 @@ if (!isConservativePath) {
             ]
         });
 
-        // 中危：TC方案
         plan.chemoOptions.push({
             id: 'c_tc_lum',
             name: 'TC 方案',
             description: '多西他赛 + 环磷酰胺 (无蒽环)',
             cycle: '4-6周期',
             type: 'chemo',
-            recommended: !isHighRisk,
-            reasoning: !isHighRisk ? '中危Luminal型，TC方案(无蒽环)疗效肯定且心脏/白血病风险更低，优选推荐。' : '备选方案。',
+            recommended: isIntermediateRisk && !isHighRisk, // 中危首选，高危次选
+            reasoning: isIntermediateRisk 
+                ? `患者为中危风险 (N${nStage}, Ki67 ${ki67Val}%)，TC方案(无蒽环)疗效肯定且毒性较低，优选推荐。` 
+                : isHighRisk ? '对于无法耐受蒽环的高危患者可作为替代。' : '中低危患者可选。',
             totalCycles: 4,
             frequencyDays: 21,
             drugs: [
@@ -356,10 +381,12 @@ if (isHER2) {
     }
 }
 
-// 2. Luminal 靶向 (CDK4/6)
+// 2. Luminal 靶向 (CDK4/6) - MonarchE 逻辑完善
 if (isLuminal) {
-    // MonarchE标准: N2+ 或 (N1 且 (T>=5cm 或 G3 或 Ki67>=20%))
-    const monarchECriteria = nStage >= 2 || (nStage === 1 && (tSize >= 5.0 || grade === 3 || ki67Val >= 20));
+    // MonarchE 入组标准 (Cohort 1): 
+    // - 淋巴结 N2+ (≥4个)
+    // - 或者 淋巴结 N1 (1-3个) 且 (G3 或 T>=5cm 或 Ki67>=20%)
+    const monarchECriteria = nStage >= 2 || (nStage >= 1 && (tSize >= 5.0 || grade === 3 || ki67Val >= 20));
     
     if (monarchECriteria) {
         plan.targetOptions.push({
@@ -369,7 +396,7 @@ if (isLuminal) {
             cycle: '每日口服 x 2年',
             type: 'target',
             recommended: true,
-            reasoning: 'MonarchE研究及指南推荐：对于高危HR+/HER2-早期乳腺癌（如N2+，或N1伴G3/高Ki67/大肿瘤），联合阿贝西利可显著改善iDFS。',
+            reasoning: `符合MonarchE研究高危标准 (N${nStage}, G${grade}, Ki67 ${ki67Val}%)，联合阿贝西利可显著降低复发风险。`,
             totalCycles: 730, // 2 years
             frequencyDays: 1,
             drugs: [
@@ -382,17 +409,18 @@ if (isLuminal) {
 // ================= 内分泌治疗 (Endocrine) =================
 
 if (isLuminal) {
-    // 绝经前且需要OFS的指征:
-    // 1. 极高危 (N2+, T3+, G3)
-    // 2. 中危且推荐化疗 (STEPP分析)
-    // 3. 极年轻 (<35岁)
-    const isHighRiskClinic = nStage >= 2 || grade === 3 || tSize > 5.0;
-    const recommendChemo = plan.chemoOptions.some(c => c.recommended);
-    const needOFS = !isMeno && (isHighRiskClinic || (nStage >= 1 && recommendChemo) || patient.age < 35);
+    // 绝经前且需要OFS (卵巢功能抑制) 的指征 (SOFT/TEXT/ASTRRA):
+    // 1. 接受过辅助化疗的患者 (STEPP分析显示高危)。
+    // 2. 虽然未化疗，但存在高危因素: N+ (尤其是N2+), G3, T>2cm, Ki67>30%。
+    // 3. 极年轻 (<35岁)。
+    
+    const recommendChemo = plan.chemoOptions.some(c => c.recommended); // 系统推荐化疗
+    const highRiskFactors = nStage >= 1 || grade === 3 || ki67Val >= 30; // 高危因素
+    
+    const needOFS = !isMeno && (recommendChemo || highRiskFactors || patient.age < 35);
 
     if (isMeno) {
         // --- 绝经后选项 ---
-        
         // 1. 来曲唑
         plan.endocrineOptions.push({
             id: 'e_letrozole',
@@ -410,7 +438,6 @@ if (isLuminal) {
                  { name: '来曲唑', standardDose: 2.5, unit: 'mg' }
             ]
         });
-
         // 2. 阿那曲唑
         plan.endocrineOptions.push({
             id: 'e_anastrozole',
@@ -418,7 +445,7 @@ if (isLuminal) {
             description: '非甾体类芳香化酶抑制剂 (AI)',
             cycle: '每日1次 口服 x 5年',
             type: 'endocrine',
-            recommended: false, // 也是一线，但默认选一个
+            recommended: false, 
             reasoning: '绝经后一线标准方案，与来曲唑疗效相当。',
             pros: ['强效抑制雌激素', '耐受性相对良好'],
             cons: ['骨丢失风险', '关节痛', '潮热'],
@@ -428,7 +455,6 @@ if (isLuminal) {
                  { name: '阿那曲唑', standardDose: 1, unit: 'mg' }
             ]
         });
-
         // 3. 依西美坦
         plan.endocrineOptions.push({
             id: 'e_exemestane',
@@ -458,8 +484,8 @@ if (isLuminal) {
                 description: 'OFS + 甾体类AI',
                 cycle: '戈舍瑞林q28d + 依西美坦每日',
                 type: 'endocrine',
-                recommended: true,
-                reasoning: `高危患者(G${grade > 0 ? grade : '?'} / ${markers.nodeStatus})，SOFT/TEXT研究证实联合AI疗效最优。`,
+                recommended: true, // SOFT/TEXT 证实高危获益最大
+                reasoning: `患者存在高危复发风险(N${nStage}, G${grade}, Ki67 ${ki67Val}%)，SOFT/TEXT研究证实 OFS+AI 疗效优于 OFS+TAM 或 单药 TAM。`,
                 pros: ['TEXT研究显示DFS获益最大', '极高危患者首选'],
                 cons: ['绝经症状严重', '性功能障碍', '骨质疏松风险最高'],
                 totalCycles: 1825,
@@ -489,8 +515,27 @@ if (isLuminal) {
                 ]
             });
 
-             // 3. 亮丙瑞林 + AI (备选GnRH)
+            // 3. 戈舍瑞林 + 他莫昔芬 (中危可选)
             plan.endocrineOptions.push({
+                id: 'e_gos_tam',
+                name: '戈舍瑞林 + 他莫昔芬',
+                description: 'OFS + SERM',
+                cycle: '戈舍瑞林q28d + TAM每日',
+                type: 'endocrine',
+                recommended: false, // 除非不能耐受AI
+                reasoning: '适用于中高危患者，特别是无法耐受AI引起的骨关节痛或骨质疏松者。',
+                pros: ['骨质疏松风险低于AI组', '血脂影响小'],
+                cons: ['潮热', '血栓风险', '子宫内膜增厚风险'],
+                totalCycles: 1825,
+                frequencyDays: 28,
+                drugs: [
+                    { name: '戈舍瑞林', standardDose: 3.6, unit: 'mg' },
+                    { name: '他莫昔芬', standardDose: 20, unit: 'mg' }
+                ]
+            });
+            
+             // 4. 亮丙瑞林 + AI (备选GnRH)
+             plan.endocrineOptions.push({
                 id: 'e_leu_let',
                 name: '亮丙瑞林 + 来曲唑',
                 description: 'OFS (亮丙瑞林) + AI',
@@ -508,25 +553,6 @@ if (isLuminal) {
                 ]
             });
 
-            // 4. 戈舍瑞林 + 他莫昔芬
-            plan.endocrineOptions.push({
-                id: 'e_gos_tam',
-                name: '戈舍瑞林 + 他莫昔芬',
-                description: 'OFS + SERM',
-                cycle: '戈舍瑞林q28d + TAM每日',
-                type: 'endocrine',
-                recommended: false,
-                reasoning: '中高危患者备选方案，若不能耐受AI的骨关节症状可选择此方案。',
-                pros: ['骨质疏松风险低于AI组', '血脂影响小'],
-                cons: ['潮热', '血栓风险', '子宫内膜增厚风险'],
-                totalCycles: 1825,
-                frequencyDays: 28,
-                drugs: [
-                    { name: '戈舍瑞林', standardDose: 3.6, unit: 'mg' },
-                    { name: '他莫昔芬', standardDose: 20, unit: 'mg' }
-                ]
-            });
-
         } else {
             // 低危绝经前: 他莫昔芬
             plan.endocrineOptions.push({
@@ -536,7 +562,7 @@ if (isLuminal) {
                 cycle: '每日1次 x 5年',
                 type: 'endocrine',
                 recommended: true,
-                reasoning: '低危绝经前患者，他莫昔芬单药是标准方案，无需OFS过度强化。',
+                reasoning: `低危绝经前患者(N0, G${grade}, Ki67 ${ki67Val}%)，他莫昔芬单药是标准方案，无需OFS过度强化。`,
                 pros: ['经典药物疗效确切', '骨保护作用(绝经前)', '心血管获益'],
                 cons: ['子宫内膜增厚', '深静脉血栓风险', '潮热'],
                 totalCycles: 1825,
