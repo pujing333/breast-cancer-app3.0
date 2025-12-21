@@ -27,6 +27,7 @@ nodeStatus: string; // cN
 histologicalGrade: string; // Histological Grade (G1, G2, G3)
 menopause: boolean; // Menopause status
 geneticTestResult?: string; // 21-gene recurrence score (RS)
+serumCreatinine?: string; // 血肌酐 (umol/L) for Calvert Formula
 }
 
 export interface TreatmentEvent {
@@ -37,7 +38,7 @@ description: string;
 completed: boolean;
 type: 'medication' | 'surgery' | 'exam' | 'other';
 sideEffects?: string[]; // List of side effects keys e.g. ['Nausea']
-dosageDetails?: string; // 新增：用于在日程中显示锁定的剂量详情
+dosageDetails?: string; // 用于在日程中显示锁定的剂量详情
 }
 
 export interface TreatmentOption {
@@ -54,24 +55,25 @@ recommended: boolean;
 export interface DrugDetail {
 name: string;
 standardDose: number; // mg/m2 or AUC
-unit: string; // 'mg/m²' or 'AUC' or 'mg'
-lockedDose?: string; // 新增：保存时计算出的具体剂量 (如 "450 mg")
+loadingDose?: number; // 针对靶向药物的首剂加量
+unit: string; // 'mg/m²', 'mg/kg', 'mg', 'AUC'
+lockedDose?: string; // 保存时计算出的具体剂量 (维持剂量)
+lockedLoadingDose?: string; // 保存时计算出的具体剂量 (首剂剂量)
 }
 
 export interface RegimenOption {
 id: string;
-name: string; // e.g. "AC-T"
-description: string; // e.g. "Doxorubicin + Cyclophosphamide..."
-cycle: string; // e.g. "q2w x 4"
+name: string; 
+description: string; 
+cycle: string; 
 type: 'chemo' | 'endocrine' | 'target' | 'immune';
 recommended: boolean;
-reasoning?: string; // Reason for recommendation
-drugs?: DrugDetail[]; // Specific drugs in this regimen
-totalCycles?: number; // e.g. 4 or 6 or 8
-frequencyDays?: number; // e.g. 14 or 21
-calculatedDose?: string; // Legacy field, keeping for compatibility
-pros?: string[]; // Advantages
-cons?: string[]; // Disadvantages/Side effects
+reasoning?: string; 
+drugs?: DrugDetail[]; 
+totalCycles?: number; 
+frequencyDays?: number; 
+pros?: string[]; 
+cons?: string[]; 
 }
 
 export interface DetailedRegimenPlan {
@@ -89,36 +91,34 @@ immuneId?: string;
 }
 
 export interface SideEffectDetail {
-strategies: string[]; // Nursing/Lifestyle advice
-medications: string[]; // Recommended drugs
+strategies: string[]; 
+medications: string[]; 
 }
 
 export interface Patient {
 id: string;
 name: string;
 age: number;
-mrn: string; // Medical Record Number
+mrn: string; 
 admissionDate: string;
 diagnosis: string;
 subtype: MolecularSubtype;
 stage: TreatmentStage;
 markers: ClinicalMarkers;
 
-height?: number; // cm
-weight?: number; // kg
+height?: number; 
+weight?: number; 
 
 phone?: string;
 address?: string;
 occupation?: string;
 
-treatmentOptions?: TreatmentOption[]; // AI generated high-level options
-selectedPlanId?: string; // The option the doctor selected
+treatmentOptions?: TreatmentOption[]; 
+selectedPlanId?: string; 
 
-detailedPlan?: DetailedRegimenPlan; // AI generated specific drug options
-selectedRegimens?: SelectedRegimens; // The specific drugs the doctor selected
+detailedPlan?: DetailedRegimenPlan; 
+selectedRegimens?: SelectedRegimens; 
 
-isPlanLocked?: boolean; // 新增：标记方案是否已锁定，防止意外修改
-
-aiSuggestion?: string; // Legacy text (optional)
+isPlanLocked?: boolean; 
 timeline: TreatmentEvent[];
 }
