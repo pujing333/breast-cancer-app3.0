@@ -1,169 +1,130 @@
 
 import React, { useState, useEffect } from 'react';
-import { RegimenOption } from '../types';
+import { RegimenOption, DrugDetail } from '../types';
 
 interface DosageCalculatorProps {
     options: RegimenOption[];
     initialHeight?: number;
     initialWeight?: number;
     onUpdateStats: (h: number, w: number) => void;
+    patientAge?: number;
+    scr?: string;
+    isLocked?: boolean;
 }
 
 export const DosageCalculator: React.FC<DosageCalculatorProps> = ({ 
     options, 
     initialHeight, 
     initialWeight,
-    onUpdateStats
+    onUpdateStats,
+    patientAge,
+    scr,
+    isLocked
 }) => {
     const [height, setHeight] = useState<string>(initialHeight ? initialHeight.toString() : '');
     const [weight, setWeight] = useState<string>(initialWeight ? initialWeight.toString() : '');
     const [bsa, setBsa] = useState<number>(0);
 
-    // Calculate BSA whenever height or weight changes
     useEffect(() => {
         const h = parseFloat(height);
         const w = parseFloat(weight);
-
-        if (!isNaN(h) && !isNaN(w) && h > 0 && w > 0) {
-            // Stevenson Formula (Common in China)
-            // BSA = 0.0061 * H + 0.0128 * W - 0.1529
+        if (h > 0 && w > 0) {
             let calculatedBsa = 0.0061 * h + 0.0128 * w - 0.1529;
-            
-            // Fallback if Stevenson returns weird value for extreme outliers, but usually reliable
-            if (calculatedBsa < 0) calculatedBsa = 0;
-
-            setBsa(Number(calculatedBsa.toFixed(2)));
+            setBsa(Math.max(0, Number(calculatedBsa.toFixed(2))));
             onUpdateStats(h, w);
-        } else {
-            setBsa(0);
         }
     }, [height, weight]);
 
-    // Helper to calculate dose based on unit
-    const calculateDose = (standard: number, unit: string) => {
+    const calculateDose = (drug: DrugDetail, type: 'standard' | 'loading' = 'standard') => {
+        // 如果已锁定，优先使用锁定的数值
+        if (type === 'standard' && drug.lockedDose) return drug.lockedDose;
+        if (type === 'loading' && drug.lockedLoadingDose) return drug.lockedLoadingDose;
+
         const w = parseFloat(weight);
-        if (unit === 'mg/m²' || unit === 'mg/m2') {
-            return bsa > 0 ? Math.round(standard * bsa) : null;
+        const h = parseFloat(height);
+        let val: number | null = null;
+        const doseToUse = type === 'loading' && drug.loadingDose ? drug.loadingDose : drug.standardDose;
+        
+        if (drug.unit === 'mg/m²' || drug.unit === 'mg/m2') {
+            val = bsa > 0 ? Math.round(doseToUse * bsa) : null;
+        } else if (drug.unit === 'mg/kg') {
+            val = w > 0 ? Math.round(doseToUse * w) : null;
+        } else if (drug.unit === 'AUC') {
+            const scrVal = parseFloat(scr || '0');
+            if (scrVal > 0 && patientAge && w > 0) {
+                const gfr = ((140 - patientAge) * w * 1.04) / scrVal;
+                val = Math.round(doseToUse * (gfr + 25));
+            }
+        } else if (drug.unit === 'mg') {
+            val = doseToUse;
         }
-        if (unit === 'mg/kg') {
-            return (!isNaN(w) && w > 0) ? Math.round(standard * w) : null;
-        }
-        // Fixed dose
-        return standard;
-    };
 
-    const getCalcMethod = (unit: string) => {
-        if (unit === 'mg/m²' || unit === 'mg/m2') return '(基于BSA)';
-        if (unit === 'mg/kg') return '(基于体重)';
-        return '(固定剂量)';
+        return val !== null ? `${val} mg` : '--';
     };
-
-    const hasValidInput = !isNaN(parseFloat(height)) && !isNaN(parseFloat(weight)) && parseFloat(height) > 0 && parseFloat(weight) > 0;
 
     return (
-        <div className="mt-6 bg-blue-50 rounded-xl p-5 border border-blue-100 shadow-sm animate-fade-in">
-            <div className="flex items-center mb-4">
-                <div className="bg-blue-600 text-white p-1.5 rounded-lg mr-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                </div>
-                <div>
-                    <h3 className="text-lg font-bold text-gray-800">药物剂量计算器</h3>
-                    <p className="text-xs text-gray-500">化疗(BSA公式) / 靶向(体重或BSA)</p>
-                </div>
+        <div className={`bg-gray-50 p-4 rounded-xl border ${isLocked ? 'border-blue-100 bg-blue-50/20' : 'border-gray-200'}`}>
+            <div className="text-sm font-bold mb-3 flex justify-between items-center">
+                <span className="text-gray-700">体征参数与剂量计算</span>
+                <span className="text-medical-600 bg-medical-50 px-2 py-0.5 rounded text-xs">BSA: {bsa} m²</span>
             </div>
-
-            {/* Inputs */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            
+            <div className="grid grid-cols-2 gap-3 mb-5">
                 <div>
-                    <label className="block text-xs font-bold text-gray-600 mb-1">身高 (cm)</label>
+                    <label className="block text-[10px] text-gray-400 font-bold mb-1 uppercase">身高 (cm)</label>
                     <input 
                         type="number" 
-                        placeholder="输入身高"
-                        className="w-full p-2 rounded border border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={height}
-                        onChange={(e) => setHeight(e.target.value)}
+                        placeholder="身高" 
+                        className="w-full p-2.5 text-sm border rounded bg-white outline-none focus:ring-1 focus:ring-medical-500" 
+                        value={height} 
+                        onChange={e => !isLocked && setHeight(e.target.value)} 
+                        disabled={isLocked}
                     />
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-gray-600 mb-1">体重 (kg)</label>
+                    <label className="block text-[10px] text-gray-400 font-bold mb-1 uppercase">体重 (kg)</label>
                     <input 
                         type="number" 
-                        placeholder="输入体重"
-                        className="w-full p-2 rounded border border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={weight}
-                        onChange={(e) => setWeight(e.target.value)}
+                        placeholder="体重" 
+                        className="w-full p-2.5 text-sm border rounded bg-white outline-none focus:ring-1 focus:ring-medical-500" 
+                        value={weight} 
+                        onChange={e => !isLocked && setWeight(e.target.value)} 
+                        disabled={isLocked}
                     />
                 </div>
             </div>
 
-            {/* Stats Result */}
-            <div className="grid grid-cols-2 gap-4 mb-5">
-                <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-blue-100">
-                    <span className="text-sm text-gray-600 font-medium">体表面积 (BSA)</span>
-                    <span className="text-lg font-bold text-blue-600">
-                        {bsa > 0 ? `${bsa} m²` : '--'}
-                    </span>
-                </div>
-                <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-blue-100">
-                    <span className="text-sm text-gray-600 font-medium">体重</span>
-                    <span className="text-lg font-bold text-blue-600">
-                        {weight ? `${weight} kg` : '--'}
-                    </span>
-                </div>
-            </div>
-
-            {/* Drugs Tables for each option */}
-            {options.map((option) => {
-                if (!option.drugs || option.drugs.length === 0) return null;
-                
-                let typeLabel = '治疗方案';
-                if (option.type === 'chemo') typeLabel = '化疗';
-                else if (option.type === 'target') typeLabel = '靶向治疗';
-                else if (option.type === 'immune') typeLabel = '免疫治疗';
-
-                return (
-                    <div key={option.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-4 last:mb-0">
-                        <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex justify-between items-center">
-                            <span className="text-xs font-bold text-gray-700 uppercase flex items-center">
-                                <span className={`w-2 h-2 rounded-full mr-2 ${option.type === 'chemo' ? 'bg-red-400' : option.type === 'target' ? 'bg-purple-400' : 'bg-green-400'}`}></span>
-                                {typeLabel}: {option.name}
-                            </span>
+            <div className="space-y-2">
+                {options.map(opt => (
+                    <div key={opt.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                        <div className="text-[10px] font-bold text-medical-600 mb-2 border-b border-medical-50 pb-1 flex justify-between">
+                            <span>{opt.name}</span>
+                            {isLocked && <span className="text-blue-500">已固化</span>}
                         </div>
-                        <div className="divide-y divide-gray-100">
-                            {option.drugs.map((drug, idx) => {
-                                const calculated = calculateDose(drug.standardDose, drug.unit);
-                                return (
-                                    <div key={idx} className="p-3 flex justify-between items-center">
-                                        <div>
-                                            <div className="font-bold text-sm text-gray-800">{drug.name}</div>
-                                            <div className="text-xs text-gray-400">标准: {drug.standardDose} {drug.unit}</div>
-                                        </div>
-                                        <div className="text-right">
-                                            {hasValidInput ? (
-                                                <>
-                                                    <div className="text-lg font-bold text-medical-600">
-                                                        {calculated !== null ? `${calculated} mg` : '计算中...'}
-                                                    </div>
-                                                    <div className="text-[10px] text-gray-400">{getCalcMethod(drug.unit)}</div>
-                                                </>
-                                            ) : (
-                                                <span className="text-xs text-gray-300">等待输入...</span>
-                                            )}
-                                        </div>
+                        <div className="space-y-1.5">
+                            {opt.drugs?.map((d, i) => (
+                                <div key={i} className="space-y-1">
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-gray-600">{d.name} {d.loadingDose ? '(维持)' : ''} <span className="text-[10px] text-gray-400">({d.standardDose} {d.unit})</span></span>
+                                        <span className="font-bold text-gray-900">{calculateDose(d, 'standard')}</span>
                                     </div>
-                                );
-                            })}
+                                    {d.loadingDose && (
+                                        <div className="flex justify-between items-center text-xs bg-accent-50/30 px-1.5 py-0.5 rounded border border-accent-100/50">
+                                            <span className="text-accent-700 italic text-[10px]">● 首剂加量 <span className="text-gray-400">({d.loadingDose} {d.unit})</span></span>
+                                            <span className="font-bold text-accent-700">{calculateDose(d, 'loading')}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     </div>
-                );
-            })}
+                ))}
+            </div>
             
-            {!hasValidInput && (
-                <div className="text-center text-sm text-gray-400 py-2">
-                    请输入身高体重以开始计算
-                </div>
+            {isLocked && (
+                <p className="mt-3 text-[10px] text-blue-500 italic text-center">
+                    * 方案已锁定，以上剂量为锁定时的历史快照。
+                </p>
             )}
         </div>
     );
