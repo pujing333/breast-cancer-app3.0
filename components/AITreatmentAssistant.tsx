@@ -150,9 +150,12 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        
+        {/* 指标输入网格 */}
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          {/* ER & PR */}
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">ER 状态</label>
+            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">ER 状态</label>
             <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.erStatus} onChange={(e) => handleUpdateMarkerField('erStatus', e.target.value)}>
               <option value="0%">0% (阴性)</option>
               <option value="1%-10%">1%-10%</option>
@@ -161,7 +164,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">PR 状态</label>
+            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">PR 状态</label>
             <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.prStatus} onChange={(e) => handleUpdateMarkerField('prStatus', e.target.value)}>
               <option value="0%">0% (阴性)</option>
               <option value="1%-10%">1%-10%</option>
@@ -169,24 +172,52 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               <option value=">50%">&gt;50%</option>
             </select>
           </div>
+
+          {/* HER2 & Ki-67 */}
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Ki-67</label>
-            <input type="number" disabled={isLocked} className="w-full p-2 text-sm border rounded outline-none" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">HER2</label>
+            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">HER2</label>
             <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.her2Status} onChange={(e) => handleUpdateMarkerField('her2Status', e.target.value)}>
-              <option value="0">0</option>
-              <option value="1+">1+</option>
-              <option value="2+">2+</option>
-              <option value="3+">3+</option>
+              <option value="0">0 (阴性)</option>
+              <option value="1+">1+ (阴性)</option>
+              <option value="2+">2+ (需检测FISH)</option>
+              <option value="3+">3+ (阳性)</option>
             </select>
           </div>
-          <div className="col-span-2">
-            <label className="block text-[10px] font-bold text-blue-500 mb-1 uppercase">血肌酐 (umol/L)</label>
-            <input type="number" disabled={isLocked} placeholder="卡铂剂量计算必填" className="w-full p-2 text-sm border border-blue-100 rounded bg-blue-50/20 outline-none" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} />
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">Ki-67 (%)</label>
+            <input type="number" disabled={isLocked} placeholder="例如: 30" className="w-full p-2 text-sm border rounded outline-none" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} />
+          </div>
+
+          {/* 肿瘤大小 & 淋巴结 (决策关键) */}
+          <div>
+            <label className="block text-[10px] font-bold text-medical-600 mb-1 uppercase tracking-tight">肿瘤大小 (cT / cm)</label>
+            <input type="text" disabled={isLocked} placeholder="例如: 2.5" className="w-full p-2 text-sm border border-medical-100 rounded outline-none" value={localMarkers.tumorSize} onChange={(e) => handleUpdateMarkerField('tumorSize', e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-medical-600 mb-1 uppercase tracking-tight">淋巴结 (cN)</label>
+            <select disabled={isLocked} className="w-full p-2 text-sm border border-medical-100 rounded bg-white outline-none" value={localMarkers.nodeStatus} onChange={(e) => handleUpdateMarkerField('nodeStatus', e.target.value)}>
+              <option value="N0">N0 (无转移)</option>
+              <option value="N1">N1 (同侧腋窝)</option>
+              <option value="N2">N2 (融合/内乳)</option>
+              <option value="N3">N3 (锁骨上/下)</option>
+            </select>
+          </div>
+
+          {/* 组织学分级 & 血肌酐 */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">组织学分级 (Grade)</label>
+            <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.histologicalGrade} onChange={(e) => handleUpdateMarkerField('histologicalGrade', e.target.value)}>
+              <option value="G1">G1 (高分化)</option>
+              <option value="G2">G2 (中分化)</option>
+              <option value="G3">G3 (低分化)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-blue-500 mb-1 uppercase tracking-tight">血肌酐 (umol/L)</label>
+            <input type="number" disabled={isLocked} placeholder="卡铂剂量必需" className="w-full p-2 text-sm border border-blue-100 rounded bg-blue-50/20 outline-none" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} />
           </div>
         </div>
+
         {!isLocked && (
           <button onClick={() => {
             onUpdateMarkers(localMarkers);
@@ -197,11 +228,13 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               setSelectedPlanId(firstId);
               onSaveOptions(opts, firstId);
             }
-          }} className="w-full mt-4 py-2 bg-medical-600 text-white rounded-lg text-xs font-bold shadow-sm">
+          }} className="w-full mt-5 py-2.5 bg-medical-600 text-white rounded-lg text-xs font-bold shadow-sm active:scale-[0.98] transition-transform">
             1. 分析病情并更新路径
           </button>
         )}
       </section>
+
+      {/* 2. 方案路径选择 */}
       {options.length > 0 && (
         <section className="space-y-2">
           <h3 className="text-xs font-bold text-gray-500 uppercase ml-1">推荐路径</h3>
@@ -234,6 +267,8 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           )}
         </section>
       )}
+
+      {/* 3. 具体用药详情 */}
       {detailedPlan && (
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-5">
           <h3 className="text-sm font-bold text-gray-800">用药明细确认</h3>
