@@ -30,13 +30,10 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
 
   const isLocked = !!patient.isPlanLocked;
 
-  // 内部辅助函数：计算并返回剂量字符串
   const getDoseDisplay = (drug: DrugDetail, isInitial: boolean = false): string => {
-    // 1. 优先返回已锁定的快照
     if (isInitial && drug.lockedLoadingDose) return drug.lockedLoadingDose;
     if (!isInitial && drug.lockedDose) return drug.lockedDose;
 
-    // 2. 否则实时计算
     const h = patient.height || 0;
     const w = patient.weight || 0;
     if (h <= 0 || w <= 0) return "--";
@@ -77,7 +74,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     }
     if (window.confirm("确定要锁定当前方案吗？锁定后剂量将固定，病理指标将不可修改。")) {
       const planToLock: DetailedRegimenPlan = JSON.parse(JSON.stringify(detailedPlan));
-      
       const processCategory = (opts: RegimenOption[], selectedId?: string) => {
         opts.forEach(opt => {
           if (opt.id === selectedId && opt.drugs) {
@@ -90,12 +86,10 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           }
         });
       };
-
       processCategory(planToLock.chemoOptions, selectedRegimens.chemoId);
       processCategory(planToLock.endocrineOptions, selectedRegimens.endocrineId);
       processCategory(planToLock.targetOptions, selectedRegimens.targetId);
       processCategory(planToLock.immuneOptions, selectedRegimens.immuneId);
-
       onSaveDetailedPlan(planToLock, selectedRegimens, true, localMarkers);
       setDetailedPlan(planToLock);
     }
@@ -110,7 +104,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   const RegimenCard = ({ opt, typeKey }: { opt: RegimenOption, typeKey: keyof SelectedRegimens }) => {
     const isSelected = selectedRegimens[typeKey] === opt.id;
     if (isLocked && !isSelected) return null;
-
     return (
       <div 
         onClick={() => !isLocked && setSelectedRegimens({ ...selectedRegimens, [typeKey]: opt.id })}
@@ -139,73 +132,50 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     );
   };
 
-  const selectedChemo = detailedPlan?.chemoOptions.find(o => o.id === selectedRegimens.chemoId);
-  const selectedEndo = detailedPlan?.endocrineOptions.find(o => o.id === selectedRegimens.endocrineId);
-  const selectedTarget = detailedPlan?.targetOptions.find(o => o.id === selectedRegimens.targetId);
-  const selectedImmune = detailedPlan?.immuneOptions.find(o => o.id === selectedRegimens.immuneId);
-  const optionsToCalculate = [selectedChemo, selectedEndo, selectedTarget, selectedImmune].filter(Boolean) as RegimenOption[];
+  const optionsToCalculate = [
+    detailedPlan?.chemoOptions.find(o => o.id === selectedRegimens.chemoId),
+    detailedPlan?.endocrineOptions.find(o => o.id === selectedRegimens.endocrineId),
+    detailedPlan?.targetOptions.find(o => o.id === selectedRegimens.targetId),
+    detailedPlan?.immuneOptions.find(o => o.id === selectedRegimens.immuneId)
+  ].filter(Boolean) as RegimenOption[];
 
   return (
     <div className="space-y-6 pb-20">
-      {/* 1. 临床指标区域 */}
       <section className={`p-4 rounded-xl border transition-all ${isLocked ? 'bg-blue-50/20 border-blue-100' : 'bg-white border-gray-100 shadow-sm'}`}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-sm font-bold text-gray-700">临床指标</h3>
           {isLocked && (
             <button onClick={handleUnlock} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded flex items-center font-bold">
-              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               解除固化
             </button>
           )}
         </div>
-
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">ER 状态</label>
-            <select 
-              disabled={isLocked}
-              className="w-full p-2 text-sm border rounded bg-white outline-none"
-              value={localMarkers.erStatus}
-              onChange={(e) => handleUpdateMarkerField('erStatus', e.target.value)}
-            >
+            <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.erStatus} onChange={(e) => handleUpdateMarkerField('erStatus', e.target.value)}>
               <option value="0%">0% (阴性)</option>
               <option value="1%-10%">1%-10%</option>
               <option value="10%-50%">10%-50%</option>
-              <option value=">50%">>50%</option>
+              <option value=">50%">&gt;50%</option>
             </select>
           </div>
           <div>
             <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">PR 状态</label>
-            <select 
-              disabled={isLocked}
-              className="w-full p-2 text-sm border rounded bg-white outline-none"
-              value={localMarkers.prStatus}
-              onChange={(e) => handleUpdateMarkerField('prStatus', e.target.value)}
-            >
+            <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.prStatus} onChange={(e) => handleUpdateMarkerField('prStatus', e.target.value)}>
               <option value="0%">0% (阴性)</option>
               <option value="1%-10%">1%-10%</option>
               <option value="10%-50%">10%-50%</option>
-              <option value=">50%">>50%</option>
+              <option value=">50%">&gt;50%</option>
             </select>
           </div>
           <div>
             <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Ki-67</label>
-            <input 
-              type="number"
-              disabled={isLocked}
-              className="w-full p-2 text-sm border rounded outline-none"
-              value={localMarkers.ki67.replace('%', '')}
-              onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')}
-            />
+            <input type="number" disabled={isLocked} className="w-full p-2 text-sm border rounded outline-none" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} />
           </div>
           <div>
             <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">HER2</label>
-            <select 
-              disabled={isLocked}
-              className="w-full p-2 text-sm border rounded bg-white outline-none"
-              value={localMarkers.her2Status}
-              onChange={(e) => handleUpdateMarkerField('her2Status', e.target.value)}
-            >
+            <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.her2Status} onChange={(e) => handleUpdateMarkerField('her2Status', e.target.value)}>
               <option value="0">0</option>
               <option value="1+">1+</option>
               <option value="2+">2+</option>
@@ -214,37 +184,24 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           </div>
           <div className="col-span-2">
             <label className="block text-[10px] font-bold text-blue-500 mb-1 uppercase">血肌酐 (umol/L)</label>
-            <input 
-              type="number"
-              disabled={isLocked}
-              placeholder="卡铂剂量计算必填"
-              className="w-full p-2 text-sm border border-blue-100 rounded bg-blue-50/20 outline-none"
-              value={localMarkers.serumCreatinine || ''}
-              onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)}
-            />
+            <input type="number" disabled={isLocked} placeholder="卡铂剂量计算必填" className="w-full p-2 text-sm border border-blue-100 rounded bg-blue-50/20 outline-none" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} />
           </div>
         </div>
-        
         {!isLocked && (
-          <button 
-            onClick={() => {
-              onUpdateMarkers(localMarkers);
-              const opts = generateLocalTreatmentOptions(patient, localMarkers);
-              if (opts.length > 0) {
-                setOptions(opts);
-                const firstId = opts.find(o => o.recommended)?.id || opts[0].id;
-                setSelectedPlanId(firstId);
-                onSaveOptions(opts, firstId);
-              }
-            }}
-            className="w-full mt-4 py-2 bg-medical-600 text-white rounded-lg text-xs font-bold shadow-sm"
-          >
+          <button onClick={() => {
+            onUpdateMarkers(localMarkers);
+            const opts = generateLocalTreatmentOptions(patient, localMarkers);
+            if (opts.length > 0) {
+              setOptions(opts);
+              const firstId = opts.find(o => o.recommended)?.id || opts[0].id;
+              setSelectedPlanId(firstId);
+              onSaveOptions(opts, firstId);
+            }
+          }} className="w-full mt-4 py-2 bg-medical-600 text-white rounded-lg text-xs font-bold shadow-sm">
             1. 分析病情并更新路径
           </button>
         )}
       </section>
-
-      {/* 2. 方案路径选择 */}
       {options.length > 0 && (
         <section className="space-y-2">
           <h3 className="text-xs font-bold text-gray-500 uppercase ml-1">推荐路径</h3>
@@ -252,44 +209,34 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             const isSelected = selectedPlanId === o.id;
             if (isLocked && !isSelected) return null;
             return (
-              <div 
-                key={o.id}
-                onClick={() => !isLocked && setSelectedPlanId(o.id)}
-                className={`p-3 border-2 rounded-xl transition-all cursor-pointer ${isSelected ? 'border-medical-600 bg-medical-50' : 'border-transparent bg-white opacity-60'}`}
-              >
+              <div key={o.id} onClick={() => !isLocked && setSelectedPlanId(o.id)} className={`p-3 border-2 rounded-xl cursor-pointer transition-all ${isSelected ? 'border-medical-600 bg-medical-50' : 'border-transparent bg-white opacity-60'}`}>
                 <div className="font-bold text-sm">{o.title}</div>
                 <div className="text-[11px] text-gray-500 mt-1">{o.description}</div>
               </div>
             );
           })}
           {!isLocked && selectedPlanId && (
-            <button 
-              onClick={() => {
-                const sel = options.find(o => o.id === selectedPlanId);
-                if (sel) {
-                  const plan = generateLocalDetailedRegimens(patient, localMarkers, sel);
-                  setDetailedPlan(plan);
-                  const initial: SelectedRegimens = {};
-                  if (plan.chemoOptions.length > 0) initial.chemoId = plan.chemoOptions[0].id;
-                  if (plan.endocrineOptions.length > 0) initial.endocrineId = plan.endocrineOptions[0].id;
-                  if (plan.targetOptions.length > 0) initial.targetId = plan.targetOptions[0].id;
-                  if (plan.immuneOptions.length > 0) initial.immuneId = plan.immuneOptions[0].id;
-                  setSelectedRegimens(initial);
-                }
-              }}
-              className="w-full py-2.5 bg-accent-600 text-white rounded-lg text-xs font-bold shadow-md"
-            >
+            <button onClick={() => {
+              const sel = options.find(o => o.id === selectedPlanId);
+              if (sel) {
+                const plan = generateLocalDetailedRegimens(patient, localMarkers, sel);
+                setDetailedPlan(plan);
+                const initial: SelectedRegimens = {};
+                if (plan.chemoOptions.length > 0) initial.chemoId = plan.chemoOptions[0].id;
+                if (plan.endocrineOptions.length > 0) initial.endocrineId = plan.endocrineOptions[0].id;
+                if (plan.targetOptions.length > 0) initial.targetId = plan.targetOptions[0].id;
+                if (plan.immuneOptions.length > 0) initial.immuneId = plan.immuneOptions[0].id;
+                setSelectedRegimens(initial);
+              }
+            }} className="w-full py-2.5 bg-accent-600 text-white rounded-lg text-xs font-bold shadow-md">
               2. 生成具体用药
             </button>
           )}
         </section>
       )}
-
-      {/* 3. 具体用药详情 */}
       {detailedPlan && (
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-5">
           <h3 className="text-sm font-bold text-gray-800">用药明细确认</h3>
-          
           {detailedPlan.chemoOptions.length > 0 && (
             <div>
               <div className="text-[10px] font-bold text-gray-400 mb-2">化疗 (Chemo)</div>
@@ -298,7 +245,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               </div>
             </div>
           )}
-
           {detailedPlan.targetOptions.length > 0 && (
             <div>
               <div className="text-[10px] font-bold text-gray-400 mb-2">靶向 (Target)</div>
@@ -307,7 +253,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               </div>
             </div>
           )}
-
           {optionsToCalculate.length > 0 && (
             <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
               <DosageCalculator 
@@ -329,10 +274,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                 isLocked={isLocked}
               />
               {!isLocked && (
-                <button 
-                  onClick={handleConfirmLock}
-                  className="w-full py-4 bg-green-600 text-white rounded-xl text-sm font-bold shadow-lg"
-                >
+                <button onClick={handleConfirmLock} className="w-full py-4 bg-green-600 text-white rounded-xl text-sm font-bold shadow-lg">
                   锁定方案并固化剂量
                 </button>
               )}
