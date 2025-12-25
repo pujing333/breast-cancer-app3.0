@@ -30,18 +30,17 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
 
   const isLocked = patient.isPlanLocked;
 
+  // 统一剂量计算逻辑：锁定状态优先返回固化值
   const calculateDoseValue = (drug: DrugDetail, p: Patient, currentMarkers: ClinicalMarkers, isInitial: boolean = false): string | null => {
-    // 1. Prioritize Locked Doses if they exist
     if (isInitial && drug.lockedLoadingDose) return drug.lockedLoadingDose;
     if (!isInitial && drug.lockedDose) return drug.lockedDose;
     
-    // 2. Dynamic Calculation
-    const h = p.height;
-    const w = p.weight;
-    if (!h || !w || h <= 0 || w <= 0) return null;
+    const h = p.height || 0;
+    const w = p.weight || 0;
+    if (h <= 0 || w <= 0) return null;
 
     const bsa = 0.0061 * h + 0.0128 * w - 0.1529;
-    const bsaFixed = bsa > 0 ? bsa : 0;
+    const bsaFixed = Math.max(0, bsa);
     
     const doseToUse = (isInitial && drug.loadingDose) ? drug.loadingDose : drug.standardDose;
     let val = 0;
@@ -96,7 +95,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         alert("请完善身高体重后再锁定方案。");
         return;
     }
-    if (window.confirm("确认锁定方案？锁定后药物剂量将固定，临床指标将不可更改。")) {
+    if (window.confirm("确认锁定方案？锁定后药物剂量将固定为当前数值，临床指标将不可更改。")) {
         const planToSave: DetailedRegimenPlan = JSON.parse(JSON.stringify(detailedPlan));
         
         const lockDosesInType = (options: RegimenOption[], selectedId?: string) => {
@@ -125,7 +124,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   };
 
   const handleUnlock = () => {
-    if (window.confirm("解锁后将恢复实时计算。是否确认解锁？")) {
+    if (window.confirm("解锁后，固化的药物剂量将被清除。是否确认解锁？")) {
         const unlockedPlan: DetailedRegimenPlan = JSON.parse(JSON.stringify(detailedPlan));
         const unlockDoses = (opts: RegimenOption[]) => opts.forEach(o => o.drugs?.forEach(d => {
             delete d.lockedDose;
@@ -171,17 +170,14 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                   <p className="text-xs text-gray-500 mt-1">{opt.description}</p>
                   {isSelected && opt.drugs && (
                       <div className="mt-2 space-y-1">
-                          {opt.drugs.map((drug, idx) => {
-                              const currentDose = calculateDoseValue(drug, patient, localMarkers, false);
-                              return (
-                                  <div key={idx} className="flex justify-between text-[11px] bg-white/50 p-1.5 rounded">
-                                      <span>{drug.name} ({drug.standardDose} {drug.unit})</span>
-                                      <span className={`font-bold ${isLocked ? 'text-blue-600' : 'text-medical-600'}`}>
-                                          {currentDose || '--'}
-                                      </span>
-                                  </div>
-                              );
-                          })}
+                          {opt.drugs.map((drug, idx) => (
+                              <div key={idx} className="flex justify-between text-[11px] bg-white/50 p-1.5 rounded">
+                                  <span>{drug.name} ({drug.standardDose} {drug.unit})</span>
+                                  <span className={`font-bold ${isLocked ? 'text-blue-600' : 'text-medical-600'}`}>
+                                      {calculateDoseValue(drug, patient, localMarkers, false) || '--'}
+                                  </span>
+                              </div>
+                          ))}
                       </div>
                   )}
               </div>
@@ -204,23 +200,23 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         <div className="flex justify-between items-center mb-4">
             <h3 className="text-md font-bold text-gray-800">临床病理指标</h3>
             {isLocked && (
-                <button onClick={handleUnlock} className="text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-lg flex items-center font-bold shadow-md">
+                <button onClick={handleUnlock} className="text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-lg flex items-center font-bold shadow-md active:scale-95 transition-all">
                     <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
-                    解锁指标修改
+                    解除固化
                 </button>
             )}
         </div>
         
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">ER 表达</label>
-                <select className="w-full p-2 text-sm border rounded focus:ring-1 focus:ring-medical-500 outline-none bg-white" value={localMarkers.erStatus} onChange={e => setLocalMarkers({...localMarkers, erStatus: e.target.value})} disabled={isLocked}>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">ER</label>
+                <select className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.erStatus} onChange={e => setLocalMarkers({...localMarkers, erStatus: e.target.value})} disabled={isLocked}>
                     <option value="0%">0% (阴性)</option><option value="1%-10%">1%-10%</option><option value="10%-50%">10%-50%</option><option value=">50%">>50%</option>
                 </select>
             </div>
             <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">PR 表达</label>
-                <select className="w-full p-2 text-sm border rounded focus:ring-1 focus:ring-medical-500 outline-none bg-white" value={localMarkers.prStatus} onChange={e => setLocalMarkers({...localMarkers, prStatus: e.target.value})} disabled={isLocked}>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">PR</label>
+                <select className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.prStatus} onChange={e => setLocalMarkers({...localMarkers, prStatus: e.target.value})} disabled={isLocked}>
                     <option value="0%">0% (阴性)</option><option value="1%-10%">1%-10%</option><option value="10%-50%">10%-50%</option><option value=">50%">>50%</option>
                 </select>
             </div>
@@ -229,7 +225,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                 <input type="number" className="w-full p-2 text-sm border rounded" value={localMarkers.ki67.replace('%','')} onChange={e => setLocalMarkers({...localMarkers, ki67: e.target.value+'%'})} disabled={isLocked} />
             </div>
             <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">分级</label>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">G分级</label>
                 <select className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.histologicalGrade} onChange={e => setLocalMarkers({...localMarkers, histologicalGrade: e.target.value})} disabled={isLocked}>
                     <option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option>
                 </select>
@@ -258,40 +254,38 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             </div>
             <div className="col-span-2">
                 <label className="block text-[10px] font-bold text-blue-500 mb-1 uppercase">血肌酐 (umol/L)</label>
-                <input type="number" className="w-full p-2 text-sm border border-blue-200 rounded focus:ring-1 focus:ring-blue-500 outline-none bg-blue-50/30" value={localMarkers.serumCreatinine || ''} onChange={e => setLocalMarkers({...localMarkers, serumCreatinine: e.target.value})} placeholder="卡铂计算必填" disabled={isLocked} />
+                <input type="number" className="w-full p-2 text-sm border border-blue-200 rounded focus:ring-1 focus:ring-blue-500 outline-none bg-blue-50/30" value={localMarkers.serumCreatinine || ''} onChange={e => setLocalMarkers({...localMarkers, serumCreatinine: e.target.value})} placeholder="卡铂(AUC)必填" disabled={isLocked} />
             </div>
         </div>
-        {!isLocked && <button onClick={handleGenerateHighLevel} className="w-full mt-4 bg-medical-600 text-white py-2.5 rounded-lg font-bold">1. 更新总体路径</button>}
+        {!isLocked && <button onClick={handleGenerateHighLevel} className="w-full mt-4 bg-medical-600 text-white py-2.5 rounded-lg font-bold shadow-md active:scale-[0.98]">1. 更新决策路径</button>}
       </section>
 
       {options.length > 0 && (
         <section className="animate-fade-in">
-           <h3 className="font-bold text-gray-700 mb-3 flex items-center">决策路径</h3>
+           <h3 className="font-bold text-gray-700 mb-3 flex items-center">方案路径</h3>
            <div className="space-y-2">
              {options.map(o => {
                  const isSelected = selectedPlanId === o.id;
                  if (isLocked && !isSelected) return null;
                  return (
                     <div key={o.id} onClick={() => !isLocked && setSelectedPlanId(o.id)} className={`p-3 border-2 rounded-xl cursor-pointer transition-all ${isSelected ? 'border-medical-600 bg-medical-50' : 'bg-white border-gray-100 opacity-60'}`}>
-                        <div className="flex justify-between items-center">
-                            <div className="font-bold text-sm text-gray-800">{o.title}</div>
-                        </div>
+                        <div className="flex justify-between items-center font-bold text-sm text-gray-800">{o.title}</div>
                         <div className="text-xs text-gray-500 mt-1">{o.description}</div>
                     </div>
                  );
              })}
            </div>
-           {!isLocked && selectedPlanId && <button onClick={handleGenerateDetailed} className="mt-4 w-full py-2.5 bg-accent-600 text-white rounded-lg text-sm font-bold shadow-md">2. 生成用药方案</button>}
+           {!isLocked && selectedPlanId && <button onClick={handleGenerateDetailed} className="mt-4 w-full py-2.5 bg-accent-600 text-white rounded-lg text-sm font-bold shadow-md active:scale-[0.98]">2. 生成具体用药</button>}
         </section>
       )}
 
       {detailedPlan && (
           <section className="bg-white p-4 rounded-xl border border-gray-100 animate-fade-in">
-              <h3 className="font-bold text-gray-700 mb-4 flex items-center">方案确认</h3>
-              <RegimenSection title="化疗" options={detailedPlan.chemoOptions} typeKey="chemoId" />
-              <RegimenSection title="内分泌" options={detailedPlan.endocrineOptions} typeKey="endocrineId" />
-              <RegimenSection title="靶向" options={detailedPlan.targetOptions} typeKey="targetId" />
-              <RegimenSection title="免疫" options={detailedPlan.immuneOptions} typeKey="immuneId" />
+              <h3 className="font-bold text-gray-700 mb-4 flex items-center">用药明细确认</h3>
+              <RegimenSection title="化疗 (Chemo)" options={detailedPlan.chemoOptions} typeKey="chemoId" />
+              <RegimenSection title="内分泌 (Endocrine)" options={detailedPlan.endocrineOptions} typeKey="endocrineId" />
+              <RegimenSection title="靶向 (Target)" options={detailedPlan.targetOptions} typeKey="targetId" />
+              <RegimenSection title="免疫 (Immune)" options={detailedPlan.immuneOptions} typeKey="immuneId" />
 
               {optionsToCalculate.length > 0 && (
                  <div className="mt-8 pt-6 border-t border-gray-100">
@@ -316,9 +310,9 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                     {!isLocked && (
                         <button 
                             onClick={handleConfirmAndSave} 
-                            className="w-full mt-6 bg-green-600 text-white py-4 rounded-xl font-bold shadow-lg flex items-center justify-center"
+                            className="w-full mt-6 bg-green-600 text-white py-4 rounded-xl font-bold shadow-lg flex items-center justify-center active:scale-[0.98]"
                         >
-                            锁定方案并固化剂量
+                            锁定方案并固化剂量数值
                         </button>
                     )}
                  </div>
