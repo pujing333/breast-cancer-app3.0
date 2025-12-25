@@ -36,7 +36,6 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
     }, [height, weight, onUpdateStats]);
 
     const calculateDose = (drug: DrugDetail, type: 'standard' | 'loading' = 'standard') => {
-        // 核心锁定逻辑：锁定状态下绝对优先返回持久化的字符串
         if (type === 'standard' && drug.lockedDose) return drug.lockedDose;
         if (type === 'loading' && drug.lockedLoadingDose) return drug.lockedLoadingDose;
 
@@ -44,18 +43,19 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
         const h = parseFloat(height);
         let val: number | null = null;
         const doseToUse = (type === 'loading' && drug.loadingDose) ? drug.loadingDose : drug.standardDose;
+        const unit = drug.unit.toLowerCase();
         
-        if (drug.unit === 'mg/m²' || drug.unit === 'mg/m2') {
+        if (unit.includes('m2') || unit.includes('m²')) {
             val = bsa > 0 ? Math.round(doseToUse * bsa) : null;
-        } else if (drug.unit === 'mg/kg') {
+        } else if (unit.includes('kg')) {
             val = w > 0 ? Math.round(doseToUse * w) : null;
-        } else if (drug.unit === 'AUC') {
+        } else if (unit === 'auc') {
             const scrVal = parseFloat(scr || '0');
             if (scrVal > 0 && patientAge && w > 0) {
                 const gfr = ((140 - patientAge) * w * 1.04) / scrVal;
                 val = Math.round(doseToUse * (gfr + 25));
             }
-        } else if (drug.unit === 'mg') {
+        } else if (unit === 'mg') {
             val = doseToUse;
         }
 
@@ -66,29 +66,17 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
         <div className={`bg-gray-50 p-4 rounded-xl border transition-all ${isLocked ? 'border-blue-100 bg-blue-50/20' : 'border-gray-200 shadow-sm'}`}>
             <div className="text-sm font-bold mb-3 flex justify-between items-center">
                 <span className="text-gray-700">剂量计算参数</span>
-                <span className="text-medical-600 bg-medical-50 px-2 py-0.5 rounded text-[10px] font-mono">BSA: {bsa} m²</span>
+                <span className="text-medical-600 bg-medical-50 px-2 py-0.5 rounded text-[10px] font-mono">BSA: {bsa} m2</span>
             </div>
             
             <div className="grid grid-cols-2 gap-3 mb-5">
                 <div>
                     <label className="block text-[10px] text-gray-400 font-bold mb-1 uppercase">身高 (cm)</label>
-                    <input 
-                        type="number" 
-                        className="w-full p-2 text-sm border rounded bg-white outline-none focus:ring-1 focus:ring-medical-500" 
-                        value={height} 
-                        onChange={e => !isLocked && setHeight(e.target.value)} 
-                        disabled={isLocked}
-                    />
+                    <input type="number" className="w-full p-2 text-sm border rounded bg-white outline-none" value={height} onChange={e => !isLocked && setHeight(e.target.value)} disabled={isLocked} />
                 </div>
                 <div>
                     <label className="block text-[10px] text-gray-400 font-bold mb-1 uppercase">体重 (kg)</label>
-                    <input 
-                        type="number" 
-                        className="w-full p-2 text-sm border rounded bg-white outline-none focus:ring-1 focus:ring-medical-500" 
-                        value={weight} 
-                        onChange={e => !isLocked && setWeight(e.target.value)} 
-                        disabled={isLocked}
-                    />
+                    <input type="number" className="w-full p-2 text-sm border rounded bg-white outline-none" value={weight} onChange={e => !isLocked && setWeight(e.target.value)} disabled={isLocked} />
                 </div>
             </div>
 
@@ -103,15 +91,12 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
                             {opt.drugs?.map((d, i) => (
                                 <div key={i} className="space-y-1">
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-600">
-                                            {d.name} {d.loadingDose ? '(维持)' : ''} 
-                                            <span className="text-[10px] text-gray-300 ml-1">[{d.standardDose}{d.unit}]</span>
-                                        </span>
+                                        <span className="text-gray-600">{d.name} <span className="text-[10px] text-gray-300 ml-1">[{d.standardDose}{d.unit}]</span></span>
                                         <span className={`font-bold ${isLocked ? 'text-blue-600' : 'text-gray-900'}`}>{calculateDose(d, 'standard')}</span>
                                     </div>
                                     {d.loadingDose && (
                                         <div className="flex justify-between items-center text-[11px] bg-accent-50/40 px-2 py-1 rounded">
-                                            <span className="text-accent-700 italic">● 首剂加量快照 <span className="text-gray-400">({d.loadingDose}{d.unit})</span></span>
+                                            <span className="text-accent-700 italic">● 首剂加量快照</span>
                                             <span className="font-bold text-accent-700">{calculateDose(d, 'loading')}</span>
                                         </div>
                                     )}
@@ -121,13 +106,6 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
                     </div>
                 ))}
             </div>
-            
-            {isLocked && (
-                <div className="mt-3 flex items-center justify-center gap-1.5 py-1.5 bg-blue-100/50 rounded-lg">
-                    <svg className="w-3 h-3 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" /></svg>
-                    <span className="text-[10px] text-blue-600 font-bold">方案已锁定，所有剂量数值已转为固定快照</span>
-                </div>
-            )}
         </div>
     );
 };
