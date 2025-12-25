@@ -31,11 +31,11 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
   const [isPreviewing, setIsPreviewing] = useState(false);
 
   const getDoseString = (drug: DrugDetail, isInitial: boolean) => {
-      // 优先使用锁定的数值
+      // 锁定状态下的排程生成必须使用固化的剂量快照
       if (isInitial && drug.lockedLoadingDose) return `${drug.name}(首剂) ${drug.lockedLoadingDose}`;
       if (!isInitial && drug.lockedDose) return `${drug.name} ${drug.lockedDose}`;
       
-      // 如果没有锁定值，则实时计算
+      // 非锁定状态实时计算
       if (patientHeight && patientWeight) {
           const bsa = Math.max(0, 0.0061 * patientHeight + 0.0128 * patientWeight - 0.1529);
           const doseToUse = (isInitial && drug.loadingDose) ? drug.loadingDose : drug.standardDose;
@@ -71,8 +71,8 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
         const dosageInfo = option.drugs?.map(d => getDoseString(d, isInitial)).join(' + ');
 
         events.push({
-          title: `${option.name} (第${i + 1}次)`,
-          description: `${option.cycle} - 周期 ${i + 1}/${cycles}`,
+          title: `${option.name} (第${i + 1}周期)`,
+          description: `${option.cycle}`,
           date: eventDate.toISOString().split('T')[0],
           type: 'medication',
           completed: false,
@@ -88,58 +88,50 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
   const typesPresent = Array.from(new Set(selectedOptions.map(o => o.type)));
 
   return (
-    <div className={`mt-6 p-4 rounded-xl border ${isLocked ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-medical-100 shadow-sm'}`}>
-      <h3 className="text-sm font-bold mb-4 flex items-center text-gray-700">
-        <svg className="w-4 h-4 mr-2 text-medical-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-        3. 日程排期排布
-      </h3>
+    <div className={`mt-6 p-4 rounded-xl border transition-all ${isLocked ? 'bg-gray-50 border-gray-100 opacity-80' : 'bg-white border-medical-100 shadow-sm'}`}>
+      <h3 className="text-sm font-bold mb-4 flex items-center text-gray-700">自动排程生成器</h3>
       
       <div className="space-y-4 mb-5">
-        {typesPresent.includes('chemo') && (
-            <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">化疗开始日期</label>
-                <input type="date" className="w-full p-2.5 text-sm border rounded bg-white outline-none focus:ring-1 focus:ring-medical-500" value={startDates.chemo} onChange={e => !isLocked && setStartDates({...startDates, chemo: e.target.value})} disabled={isLocked} />
+        {typesPresent.map(type => (
+            <div key={type}>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">
+                    {type === 'chemo' ? '化疗' : type === 'endocrine' ? '内分泌' : '靶向/免疫'} 开始日期
+                </label>
+                <input 
+                  type="date" 
+                  className="w-full p-2 text-sm border rounded bg-white" 
+                  value={startDates[type] || ''} 
+                  onChange={e => !isLocked && setStartDates({...startDates, [type]: e.target.value})} 
+                  disabled={isLocked} 
+                />
             </div>
-        )}
-        {typesPresent.includes('endocrine') && (
-            <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">内分泌开始日期</label>
-                <input type="date" className="w-full p-2.5 text-sm border rounded bg-white outline-none focus:ring-1 focus:ring-medical-500" value={startDates.endocrine} onChange={e => !isLocked && setStartDates({...startDates, endocrine: e.target.value})} disabled={isLocked} />
-            </div>
-        )}
-        {(typesPresent.includes('target') || typesPresent.includes('immune')) && (
-            <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">靶向/免疫开始日期</label>
-                <input type="date" className="w-full p-2.5 text-sm border rounded bg-white outline-none focus:ring-1 focus:ring-medical-500" value={startDates.target} onChange={e => !isLocked && setStartDates({...startDates, target: e.target.value, immune: e.target.value})} disabled={isLocked} />
-            </div>
-        )}
+        ))}
       </div>
 
       {!isPreviewing ? (
           <button 
             onClick={handleGenerate} 
-            disabled={isLocked}
-            className={`w-full py-3 rounded-lg text-xs font-bold transition-all ${isLocked ? 'bg-gray-200 text-gray-400' : 'bg-medical-50 text-medical-700 border border-medical-200 active:scale-[0.98]'}`}
+            className="w-full py-2.5 bg-medical-50 text-medical-700 rounded-lg text-xs font-bold border border-medical-100 active:scale-95 transition-transform"
           >
-              预览自动排程 (含首剂加量逻辑)
+              预览治疗日历 ({isLocked ? '读取固化剂量' : '实时计算剂量'})
           </button>
       ) : (
-          <div className="space-y-3 animate-fade-in">
+          <div className="space-y-3">
               <div className="max-h-48 overflow-y-auto bg-gray-50 p-2.5 rounded-lg text-[10px] space-y-1.5 border border-gray-100">
                   {generatedEvents.map((e, i) => (
-                      <div key={i} className="flex flex-col bg-white p-2 rounded shadow-xs border-l-2 border-medical-500">
+                      <div key={i} className="bg-white p-2 rounded shadow-xs border-l-2 border-medical-500">
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-gray-400 font-mono">{e.date}</span>
                             <span className="font-bold text-gray-700">{e.title}</span>
                           </div>
-                          <div className="text-[9px] text-medical-600 truncate">{e.dosageDetails}</div>
+                          <div className="text-[9px] text-medical-600 truncate bg-medical-50/50 p-1 rounded italic">{e.dosageDetails}</div>
                       </div>
                   ))}
               </div>
               {!isLocked && (
-                <div className="flex gap-3">
-                    <button onClick={() => setIsPreviewing(false)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold">重新调整</button>
-                    <button onClick={() => {onSaveEvents(generatedEvents); setIsPreviewing(false);}} className="flex-1 py-3 bg-medical-600 text-white rounded-lg text-xs font-bold shadow-md">确认并添加到日程</button>
+                <div className="flex gap-2">
+                    <button onClick={() => setIsPreviewing(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold">修改</button>
+                    <button onClick={() => {onSaveEvents(generatedEvents); setIsPreviewing(false);}} className="flex-1 py-2 bg-medical-600 text-white rounded-lg text-xs font-bold">写入患者日程</button>
                 </div>
               )}
           </div>
