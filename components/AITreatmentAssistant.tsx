@@ -151,9 +151,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           )}
         </div>
         
-        {/* 指标输入网格 */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-          {/* ER & PR */}
           <div>
             <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">ER 状态</label>
             <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.erStatus} onChange={(e) => handleUpdateMarkerField('erStatus', e.target.value)}>
@@ -173,7 +171,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             </select>
           </div>
 
-          {/* HER2 & Ki-67 */}
           <div>
             <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">HER2</label>
             <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.her2Status} onChange={(e) => handleUpdateMarkerField('her2Status', e.target.value)}>
@@ -188,7 +185,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             <input type="number" disabled={isLocked} placeholder="例如: 30" className="w-full p-2 text-sm border rounded outline-none" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} />
           </div>
 
-          {/* 肿瘤大小 & 淋巴结 (决策关键) */}
           <div>
             <label className="block text-[10px] font-bold text-medical-600 mb-1 uppercase tracking-tight">肿瘤大小 (cT / cm)</label>
             <input type="text" disabled={isLocked} placeholder="例如: 2.5" className="w-full p-2 text-sm border border-medical-100 rounded outline-none" value={localMarkers.tumorSize} onChange={(e) => handleUpdateMarkerField('tumorSize', e.target.value)} />
@@ -203,7 +199,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             </select>
           </div>
 
-          {/* 组织学分级 & 血肌酐 */}
           <div>
             <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">组织学分级 (Grade)</label>
             <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.histologicalGrade} onChange={(e) => handleUpdateMarkerField('histologicalGrade', e.target.value)}>
@@ -212,9 +207,14 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               <option value="G3">G3 (低分化)</option>
             </select>
           </div>
-          <div>
+          <div className="relative">
+            <label className="block text-[10px] font-bold text-accent-700 mb-1 uppercase tracking-tight">基因检测 (RS/MP 评分)</label>
+            <input type="text" disabled={isLocked} placeholder="例如: 18" className="w-full p-2 text-sm border border-accent-200 rounded bg-accent-50/20 outline-none placeholder:text-accent-300" value={localMarkers.geneticTestResult || ''} onChange={(e) => handleUpdateMarkerField('geneticTestResult', e.target.value)} />
+          </div>
+
+          <div className="col-span-2">
             <label className="block text-[10px] font-bold text-blue-500 mb-1 uppercase tracking-tight">血肌酐 (umol/L)</label>
-            <input type="number" disabled={isLocked} placeholder="卡铂剂量必需" className="w-full p-2 text-sm border border-blue-100 rounded bg-blue-50/20 outline-none" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} />
+            <input type="number" disabled={isLocked} placeholder="卡铂剂量必需指标" className="w-full p-2 text-sm border border-blue-100 rounded bg-blue-50/20 outline-none" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} />
           </div>
         </div>
 
@@ -234,7 +234,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         )}
       </section>
 
-      {/* 2. 方案路径选择 */}
       {options.length > 0 && (
         <section className="space-y-2">
           <h3 className="text-xs font-bold text-gray-500 uppercase ml-1">推荐路径</h3>
@@ -242,9 +241,17 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             const isSelected = selectedPlanId === o.id;
             if (isLocked && !isSelected) return null;
             return (
-              <div key={o.id} onClick={() => !isLocked && setSelectedPlanId(o.id)} className={`p-3 border-2 rounded-xl cursor-pointer transition-all ${isSelected ? 'border-medical-600 bg-medical-50' : 'border-transparent bg-white opacity-60'}`}>
-                <div className="font-bold text-sm">{o.title}</div>
-                <div className="text-[11px] text-gray-500 mt-1">{o.description}</div>
+              <div key={o.id} onClick={() => !isLocked && setSelectedPlanId(o.id)} className={`p-3 border-2 rounded-xl cursor-pointer transition-all ${isSelected ? 'border-medical-600 bg-medical-50 shadow-sm ring-1 ring-medical-200' : 'border-transparent bg-white opacity-60'}`}>
+                <div className="flex justify-between items-center">
+                  <div className="font-bold text-sm">{o.title}</div>
+                  {o.recommended && !isLocked && <span className="text-[10px] bg-medical-600 text-white px-2 py-0.5 rounded-full">指南推荐</span>}
+                </div>
+                <div className="text-[11px] text-gray-500 mt-1 leading-relaxed">{o.description}</div>
+                {isSelected && o.pros && o.pros.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {o.pros.map((p, i) => <span key={i} className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{p}</span>)}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -268,7 +275,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         </section>
       )}
 
-      {/* 3. 具体用药详情 */}
       {detailedPlan && (
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-5">
           <h3 className="text-sm font-bold text-gray-800">用药明细确认</h3>
@@ -286,6 +292,14 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               <div className="space-y-2">
                 {detailedPlan.targetOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}
               </div>
+            </div>
+          )}
+          {detailedPlan.endocrineOptions.length > 0 && (
+            <div>
+                <div className="text-[10px] font-bold text-gray-400 mb-2">内分泌 (Endocrine)</div>
+                <div className="space-y-2">
+                    {detailedPlan.endocrineOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="endocrineId" />)}
+                </div>
             </div>
           )}
           {optionsToCalculate.length > 0 && (
