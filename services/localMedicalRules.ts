@@ -65,19 +65,29 @@ const isHRPositive = erVal > 0 || prVal > 0;
 const needNeoadjuvant = (isHER2 || isTNBC) && (tSize > 2.0 || nStage >= 1);
 const luminalNeoadjuvant = isHRPositive && !isHER2 && (nStage >= 3 || (nStage >= 2 && grade === 3));
 
+// 核心决策：是否可以豁免化疗
 let canWaiveChemo = false;
 let waiverReason = "";
+let waiverHighlyRecommended = false;
 
-if (isHRPositive && !isHER2 && nStage === 0) {
+if (isHRPositive && !isHER2 && nStage <= 1) { // 涵盖 N0 和部分 N1 (RxPONDER)
     if (rsScore !== null) {
         if (rsScore < 26) {
             canWaiveChemo = true;
-            waiverReason = `RS评分为 ${rsScore} (<26)，根据TAILORx研究，获益于化疗的可能性极低。`;
+            waiverHighlyRecommended = true;
+            waiverReason = `RS评分 ${rsScore} (<26)，基于TAILORx/RxPONDER研究，化疗无显著获益。`;
+        } else {
+            waiverReason = `RS评分 ${rsScore} (≥26)，建议化疗序贯内分泌。`;
         }
     } else {
-        if (tSize <= 1.0 && grade <= 2 && ki67 < 30) {
+        // 临床指标评估
+        if (nStage === 0 && tSize <= 1.0 && grade <= 2 && ki67 < 30) {
             canWaiveChemo = true; 
-            waiverReason = "临床低危，通常无需化疗。建议Oncotype DX。";
+            waiverReason = "临床特征表现为低危，可考虑豁免化疗。建议进行基因检测明确。";
+        } else if (nStage <= 1) {
+            // 虽然不直接豁免，但提供这个选项供医生评估，或者提示基因检测
+            canWaiveChemo = true;
+            waiverReason = "腔面型早期。建议进行21/70基因检测以评估化疗获益。";
         }
     }
 }
@@ -86,7 +96,7 @@ const neoadjuvantOption: TreatmentOption = {
     id: 'path_neoadjuvant',
     title: '新辅助治疗 → 手术 → 辅助治疗',
     iconType: 'chemo',
-    description: '术前降期，评价药敏。',
+    description: '术前降期，评价药敏，适用于高危或需保乳患者。',
     duration: '6-8个月(术前) + 手术 + 术后',
     pros: ['直观评价药敏', '增加保乳机会'],
     cons: ['周期长'],
@@ -97,7 +107,7 @@ const surgeryOption: TreatmentOption = {
     id: 'path_surgery',
     title: '手术 → 辅助治疗',
     iconType: 'surgery',
-    description: '先行手术，明确病理。',
+    description: '先行手术明确病理分期，再决定后续治疗。',
     duration: '1个月(手术) + 4-6个月(化疗) + 5-10年(内分泌)',
     pros: ['迅速去瘤', '分期精准'],
     cons: ['无体内药敏'],
@@ -108,19 +118,22 @@ const conservativeOption: TreatmentOption = {
     id: 'path_conservative',
     title: '手术 → 单纯内分泌 (豁免化疗)',
     iconType: 'drug',
-    description: waiverReason || '适用于低危HR+患者。',
-    duration: '5-10年',
-    pros: ['生活质量高'],
-    cons: ['需精准评估'],
+    description: waiverReason || '适用于低危HR+患者，仅需口服药物治疗。',
+    duration: '5-10年内分泌治疗',
+    pros: ['生活质量极高', '无化疗毒性'],
+    cons: ['需精准基因组评估'],
     recommended: false
 };
 
 if (needNeoadjuvant || luminalNeoadjuvant) {
     neoadjuvantOption.recommended = true;
     options.push(neoadjuvantOption, surgeryOption);
-} else if (canWaiveChemo && rsScore !== null && rsScore < 26) {
+} else if (waiverHighlyRecommended) {
     conservativeOption.recommended = true;
     options.push(conservativeOption, surgeryOption);
+} else if (canWaiveChemo) {
+    surgeryOption.recommended = true; // 默认推荐手术，但同时给出豁免化疗选项
+    options.push(surgeryOption, conservativeOption);
 } else {
     surgeryOption.recommended = true;
     options.push(surgeryOption, neoadjuvantOption);
@@ -157,6 +170,7 @@ const isHRPositive = erVal > 0 || prVal > 0;
 const isNeoadjuvantPath = highLevelPlan.id === 'path_neoadjuvant';
 const isConservativePath = highLevelPlan.id === 'path_conservative';
 
+// 如果选择了豁免化疗，则 chemoOptions 留空
 if (!isConservativePath) {
     if (isHER2) {
         plan.chemoOptions.push({
@@ -252,7 +266,6 @@ if (isHER2) {
         recommended: nStage >= 1 || isNeoadjuvantPath,
         totalCycles: 18,
         frequencyDays: 21,
-        // 首剂加量配置
         drugs: [
             { name: '曲妥珠单抗', standardDose: 6, loadingDose: 8, unit: 'mg/kg' }, 
             { name: '帕妥珠单抗', standardDose: 420, loadingDose: 840, unit: 'mg' }
