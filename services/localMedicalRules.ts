@@ -75,13 +75,11 @@ let waiverHighlyRecommended = false;
 
 if (isHRPositive && !isHER2 && nStage <= 1) {
     if (rsScore !== null) {
-        // RS评分决策逻辑
         if (rsScore < 11) {
             canWaiveChemo = true;
             waiverHighlyRecommended = true;
             waiverReason = `RS评分 ${rsScore} (极低危)，强烈建议豁免化疗。`;
         } else if (rsScore >= 11 && rsScore < 26) {
-            // 若 RS 在 11-25 之间，需结合临床特征
             if (isClinicalHighRisk && rsScore >= 21) {
               canWaiveChemo = true;
               waiverReason = `RS评分 ${rsScore}。虽属低获益区，但合并临床高危因素(G3/Ki67高/N1)，请谨慎考虑是否豁免。`;
@@ -94,7 +92,6 @@ if (isHRPositive && !isHER2 && nStage <= 1) {
             waiverReason = `RS评分 ${rsScore} (≥26)，建议化疗序贯内分泌。`;
         }
     } else {
-        // 临床指标评估
         if (nStage === 0 && tSize <= 1.0 && grade <= 2 && ki67 < 15) {
             canWaiveChemo = true; 
             waiverHighlyRecommended = true;
@@ -183,7 +180,6 @@ const isHER2 = subtype === MolecularSubtype.HER2Positive || (markers.her2Status 
 const isTNBC = subtype === MolecularSubtype.TripleNegative;
 const isHRPositive = erVal > 0 || prVal > 0;
 
-// 是否属于高危因素
 const isClinicalHighRisk = grade === 3 || ki67Val >= 30 || nStage >= 1;
 
 const isNeoadjuvantPath = highLevelPlan.id === 'path_neoadjuvant';
@@ -247,7 +243,7 @@ if (!isConservativePath) {
             description: '蒽环序贯紫杉 (经典/密集)',
             cycle: '8周期',
             type: 'chemo',
-            recommended: isClinicalHighRisk, // 只要临床高危就推荐 AC-T
+            recommended: isClinicalHighRisk, 
             totalCycles: 8,
             frequencyDays: 21,
             drugs: [
@@ -262,7 +258,7 @@ if (!isConservativePath) {
             description: '多西他赛 + 环磷酰胺',
             cycle: '4-6周期',
             type: 'chemo',
-            recommended: !isClinicalHighRisk, // 只有非高危才优先推荐 TC
+            recommended: !isClinicalHighRisk, 
             totalCycles: 4,
             frequencyDays: 21,
             drugs: [
@@ -291,35 +287,47 @@ if (isHER2) {
 }
 
 if (isHRPositive) {
+    // 基础内分泌逻辑
     const needOFS = !isMeno && (nStage >= 1 || patient.age < 35 || ki67Val >= 20);
+    
+    // CDK4/6i 阿贝西利判定 (MonarchE)
+    const isAbemaciclibCandidate = (nStage >= 2) || (nStage === 1 && (grade === 3 || tSize >= 5 || ki67Val >= 20));
+
     if (isMeno) {
         plan.endocrineOptions.push({
-            id: 'e_ai',
-            name: '芳香化酶抑制剂 (AI)',
-            description: '来曲唑/阿那曲唑/依西美坦',
-            cycle: '每日1次 x 5年',
+            id: 'e_ai_post',
+            name: isAbemaciclibCandidate ? 'AI + 阿贝西利' : '芳香化酶抑制剂 (AI)',
+            description: isAbemaciclibCandidate ? '内分泌强化方案 (MonarchE)' : '来曲唑/阿那曲唑/依西美坦',
+            cycle: 'AI(5-10年) + 阿贝西利(2年)',
             type: 'endocrine',
             recommended: true,
-            totalCycles: 1825,
+            totalCycles: 730,
             frequencyDays: 1,
-            drugs: [{ name: '来曲唑', standardDose: 2.5, unit: 'mg' }]
+            drugs: [
+                { name: '来曲唑', standardDose: 2.5, unit: 'mg' },
+                ...(isAbemaciclibCandidate ? [{ name: '阿贝西利', standardDose: 150, unit: 'mg (bid)' }] : [])
+            ]
         });
     } else {
         if (needOFS) {
             plan.endocrineOptions.push({
-                id: 'e_ofs_ai',
-                name: 'OFS + AI',
-                description: '戈舍瑞林 + 依西美坦',
-                cycle: 'q28d + qd',
+                id: 'e_ofs_ai_pre',
+                name: isAbemaciclibCandidate ? 'OFS + AI + 阿贝西利' : 'OFS + AI',
+                description: '卵巢功能抑制序贯/联用AI',
+                cycle: '阿贝西利强化2年',
                 type: 'endocrine',
                 recommended: true,
-                totalCycles: 1825,
+                totalCycles: 730,
                 frequencyDays: 28,
-                drugs: [{ name: '戈舍瑞林', standardDose: 3.6, unit: 'mg' }, { name: '依西美坦', standardDose: 25, unit: 'mg' }]
+                drugs: [
+                    { name: '戈舍瑞林', standardDose: 3.6, unit: 'mg' }, 
+                    { name: '依西美坦', standardDose: 25, unit: 'mg' },
+                    ...(isAbemaciclibCandidate ? [{ name: '阿贝西利', standardDose: 150, unit: 'mg (bid)' }] : [])
+                ]
             });
         } else {
             plan.endocrineOptions.push({
-                id: 'e_tam',
+                id: 'e_tam_pre',
                 name: '他莫昔芬 (TAM)',
                 description: '每日20mg',
                 cycle: 'qd x 5年',
