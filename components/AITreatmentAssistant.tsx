@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Patient, ClinicalMarkers, TreatmentOption, DetailedRegimenPlan, RegimenOption, SelectedRegimens, TreatmentEvent, DrugDetail } from '../types';
 import { generateLocalTreatmentOptions, generateLocalDetailedRegimens } from '../services/localMedicalRules';
 import { DosageCalculator } from './DosageCalculator';
@@ -29,6 +29,27 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   const [selectedRegimens, setSelectedRegimens] = useState<SelectedRegimens>(patient.selectedRegimens || {});
 
   const isLocked = !!patient.isPlanLocked;
+
+  // 实时风险评估逻辑
+  const riskAssessment = useMemo(() => {
+    const ki67Val = parseFloat(localMarkers.ki67.replace('%', '')) || 0;
+    const isG3 = localMarkers.histologicalGrade === 'G3';
+    const isNPlus = localMarkers.nodeStatus !== 'N0';
+    const isHighKi67 = ki67Val >= 30;
+    
+    const factors = [];
+    if (isG3) factors.push("分级G3");
+    if (isHighKi67) factors.push(`Ki-67高(${ki67Val}%)`);
+    if (isNPlus) factors.push("淋巴结阳性");
+
+    return {
+      isHighRisk: factors.length > 0,
+      factors,
+      isG3,
+      isHighKi67,
+      isNPlus
+    };
+  }, [localMarkers]);
 
   const getDoseDisplay = (drug: DrugDetail, isInitial: boolean = false): string => {
     if (isInitial && drug.lockedLoadingDose) return drug.lockedLoadingDose;
@@ -141,9 +162,17 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
 
   return (
     <div className="space-y-6 pb-20">
+      {/* 临床指标区域 */}
       <section className={`p-4 rounded-xl border transition-all ${isLocked ? 'bg-blue-50/20 border-blue-100' : 'bg-white border-gray-100 shadow-sm'}`}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-sm font-bold text-gray-700">临床指标</h3>
+          <h3 className="text-sm font-bold text-gray-700 flex items-center">
+            临床指标
+            {riskAssessment.isHighRisk && !isLocked && (
+              <span className="ml-2 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md animate-pulse">
+                检测到高危因素
+              </span>
+            )}
+          </h3>
           {isLocked && (
             <button onClick={handleUnlock} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded flex items-center font-bold">
               解除固化
@@ -181,8 +210,17 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">Ki-67 (%)</label>
-            <input type="number" disabled={isLocked} placeholder="例如: 30" className="w-full p-2 text-sm border rounded outline-none" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} />
+            <label className={`block text-[10px] font-bold mb-1 uppercase tracking-tight ${riskAssessment.isHighKi67 ? 'text-red-600' : 'text-gray-400'}`}>
+              Ki-67 (%) {riskAssessment.isHighKi67 && '⚠️'}
+            </label>
+            <input 
+              type="number" 
+              disabled={isLocked} 
+              placeholder="例如: 30" 
+              className={`w-full p-2 text-sm border rounded outline-none transition-colors ${riskAssessment.isHighKi67 ? 'border-red-300 bg-red-50/30' : 'border-gray-200'}`} 
+              value={localMarkers.ki67.replace('%', '')} 
+              onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} 
+            />
           </div>
 
           <div>
@@ -190,8 +228,15 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             <input type="text" disabled={isLocked} placeholder="例如: 2.5" className="w-full p-2 text-sm border border-medical-100 rounded outline-none" value={localMarkers.tumorSize} onChange={(e) => handleUpdateMarkerField('tumorSize', e.target.value)} />
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-medical-600 mb-1 uppercase tracking-tight">淋巴结 (cN)</label>
-            <select disabled={isLocked} className="w-full p-2 text-sm border border-medical-100 rounded bg-white outline-none" value={localMarkers.nodeStatus} onChange={(e) => handleUpdateMarkerField('nodeStatus', e.target.value)}>
+            <label className={`block text-[10px] font-bold mb-1 uppercase tracking-tight ${riskAssessment.isNPlus ? 'text-red-600' : 'text-medical-600'}`}>
+              淋巴结 (cN) {riskAssessment.isNPlus && '⚠️'}
+            </label>
+            <select 
+              disabled={isLocked} 
+              className={`w-full p-2 text-sm border rounded bg-white outline-none transition-colors ${riskAssessment.isNPlus ? 'border-red-300 bg-red-50/30 text-red-700' : 'border-medical-100'}`} 
+              value={localMarkers.nodeStatus} 
+              onChange={(e) => handleUpdateMarkerField('nodeStatus', e.target.value)}
+            >
               <option value="N0">N0 (无转移)</option>
               <option value="N1">N1 (同侧腋窝)</option>
               <option value="N2">N2 (融合/内乳)</option>
@@ -200,8 +245,15 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">组织学分级 (Grade)</label>
-            <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.histologicalGrade} onChange={(e) => handleUpdateMarkerField('histologicalGrade', e.target.value)}>
+            <label className={`block text-[10px] font-bold mb-1 uppercase tracking-tight ${riskAssessment.isG3 ? 'text-red-600' : 'text-gray-400'}`}>
+              组织学分级 (Grade) {riskAssessment.isG3 && '⚠️'}
+            </label>
+            <select 
+              disabled={isLocked} 
+              className={`w-full p-2 text-sm border rounded bg-white outline-none transition-colors ${riskAssessment.isG3 ? 'border-red-300 bg-red-50/30 text-red-700' : 'border-gray-200'}`} 
+              value={localMarkers.histologicalGrade} 
+              onChange={(e) => handleUpdateMarkerField('histologicalGrade', e.target.value)}
+            >
               <option value="G1">G1 (高分化)</option>
               <option value="G2">G2 (中分化)</option>
               <option value="G3">G3 (低分化)</option>
@@ -217,6 +269,19 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             <input type="number" disabled={isLocked} placeholder="卡铂剂量必需指标" className="w-full p-2 text-sm border border-blue-100 rounded bg-blue-50/20 outline-none" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} />
           </div>
         </div>
+
+        {/* 实时风险评估小板 */}
+        {!isLocked && riskAssessment.isHighRisk && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-lg">
+             <div className="text-[10px] font-bold text-red-700 uppercase mb-1">风险画像评估 (Risk Profile)</div>
+             <div className="flex flex-wrap gap-1.5">
+                {riskAssessment.factors.map(f => (
+                  <span key={f} className="text-[9px] bg-white text-red-600 px-1.5 py-0.5 rounded border border-red-200 font-bold">● {f}</span>
+                ))}
+             </div>
+             <p className="text-[9px] text-red-500 mt-2 font-medium italic">提示：存在高危生物学特征，建议在路径分析时优先考虑强化辅助方案。</p>
+          </div>
+        )}
 
         {!isLocked && (
           <button onClick={() => {
@@ -234,6 +299,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         )}
       </section>
 
+      {/* 路径分析结果 */}
       {options.length > 0 && (
         <section className="space-y-2">
           <h3 className="text-xs font-bold text-gray-500 uppercase ml-1">推荐路径</h3>
@@ -243,7 +309,12 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             return (
               <div key={o.id} onClick={() => !isLocked && setSelectedPlanId(o.id)} className={`p-3 border-2 rounded-xl cursor-pointer transition-all ${isSelected ? 'border-medical-600 bg-medical-50 shadow-sm ring-1 ring-medical-200' : 'border-transparent bg-white opacity-60'}`}>
                 <div className="flex justify-between items-center">
-                  <div className="font-bold text-sm">{o.title}</div>
+                  <div className="font-bold text-sm flex items-center">
+                    {o.title}
+                    {isSelected && riskAssessment.isHighRisk && o.id !== 'path_conservative' && (
+                      <span className="ml-2 text-[9px] bg-red-600 text-white px-1.5 py-0.5 rounded">强化推荐</span>
+                    )}
+                  </div>
                   {o.recommended && !isLocked && <span className="text-[10px] bg-medical-600 text-white px-2 py-0.5 rounded-full">指南推荐</span>}
                 </div>
                 <div className="text-[11px] text-gray-500 mt-1 leading-relaxed">{o.description}</div>
@@ -275,12 +346,20 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         </section>
       )}
 
+      {/* 具体用药方案 */}
       {detailedPlan && (
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-5">
-          <h3 className="text-sm font-bold text-gray-800">用药明细确认</h3>
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-bold text-gray-800">用药明细确认</h3>
+            {riskAssessment.isHighRisk && (
+              <span className="text-[10px] text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded border border-red-100">
+                已根据临床高危特征优化
+              </span>
+            )}
+          </div>
           {detailedPlan.chemoOptions.length > 0 && (
             <div>
-              <div className="text-[10px] font-bold text-gray-400 mb-2">化疗 (Chemo)</div>
+              <div className="text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">化疗方案 (Chemo)</div>
               <div className="space-y-2">
                 {detailedPlan.chemoOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="chemoId" />)}
               </div>
@@ -288,7 +367,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           )}
           {detailedPlan.targetOptions.length > 0 && (
             <div>
-              <div className="text-[10px] font-bold text-gray-400 mb-2">靶向 (Target)</div>
+              <div className="text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">靶向方案 (Target)</div>
               <div className="space-y-2">
                 {detailedPlan.targetOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}
               </div>
@@ -296,7 +375,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           )}
           {detailedPlan.endocrineOptions.length > 0 && (
             <div>
-                <div className="text-[10px] font-bold text-gray-400 mb-2">内分泌 (Endocrine)</div>
+                <div className="text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">内分泌方案 (Endocrine)</div>
                 <div className="space-y-2">
                     {detailedPlan.endocrineOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="endocrineId" />)}
                 </div>
