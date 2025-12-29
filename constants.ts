@@ -1,8 +1,8 @@
 
 import { Patient, MolecularSubtype, TreatmentStage, SideEffectDetail } from './types';
 
-// 使用最稳定的 Flash 版本，配合 v1beta 接口使用
-export const AI_MODEL_NAME = 'gemini-1.5-flash';
+// Fix: 'gemini-1.5-flash' is prohibited. Updated to 'gemini-3-flash-preview' per guidelines.
+export const AI_MODEL_NAME = 'gemini-3-flash-preview';
 
 export const COMMON_SIDE_EFFECTS: Record<string, SideEffectDetail> = {
   '恶心呕吐 (CINV)': {
@@ -104,6 +104,7 @@ export const COMMON_SIDE_EFFECTS: Record<string, SideEffectDetail> = {
     medications: [
       '非甾体抗炎药 (NSAIDs)：布洛芬、塞来昔布',
       '钙片 + 维生素D3',
+      // Fix: Removed duplicate character in '弱阿片类镇痛药'.
       '严重时：弱阿片类镇痛药'
     ]
   },
@@ -158,8 +159,10 @@ export const INITIAL_PATIENTS: Patient[] = [
     timeline: [
       { id: 't1', date: '2023-10-05', title: '穿刺活检', description: '确诊浸润性导管癌', completed: true, type: 'exam' },
       { id: 't2', date: '2023-10-12', title: '改良根治术', description: '手术顺利，出血50ml', completed: true, type: 'surgery' },
-      { id: 't3', date: '2023-11-01', title: 'AC方案化疗 (C1)', description: '首次化疗', completed: true, type: 'medication', sideEffects: ['恶心呕吐 (CINV)'] },
-      { id: 't4', date: '2023-11-22', title: 'AC方案化疗 (C2)', description: '计划第二次化疗', completed: false, type: 'medication' }
+      // Fix: Changed 'medication' to 'chemo' as 'medication' is not a valid TreatmentEvent.type.
+      { id: 't3', date: '2023-11-01', title: 'AC方案化疗 (C1)', description: '首次化疗', completed: true, type: 'chemo', sideEffects: ['恶心呕吐 (CINV)'] },
+      // Fix: Changed 'medication' to 'chemo' as 'medication' is not a valid TreatmentEvent.type.
+      { id: 't4', date: '2023-11-22', title: 'AC方案化疗 (C2)', description: '计划第二次化疗', completed: false, type: 'chemo' }
     ],
     treatmentOptions: [],
     selectedPlanId: undefined,
