@@ -29,13 +29,12 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
   });
   const [generatedEvents, setGeneratedEvents] = useState<Omit<TreatmentEvent, 'id'>[]>([]);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const getDoseString = (drug: DrugDetail, isInitial: boolean) => {
-      // 锁定状态下的排程生成必须使用固化的剂量快照
       if (isInitial && drug.lockedLoadingDose) return `${drug.name}(首剂) ${drug.lockedLoadingDose}`;
       if (!isInitial && drug.lockedDose) return `${drug.name} ${drug.lockedDose}`;
       
-      // 非锁定状态实时计算
       if (patientHeight && patientWeight) {
           const bsa = Math.max(0, 0.0061 * patientHeight + 0.0128 * patientWeight - 0.1529);
           const doseToUse = (isInitial && drug.loadingDose) ? drug.loadingDose : drug.standardDose;
@@ -49,8 +48,9 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               const gfr = ((140 - patientAge) * patientWeight * 1.04) / scrVal;
               val = Math.round(doseToUse * (gfr + 25));
           } else if (drug.unit === 'mg') val = doseToUse;
+          else if (drug.unit === 'qd' || drug.unit === 'bid') return `${drug.name} ${drug.standardDose} ${drug.unit}`;
 
-          return `${drug.name}${label} ${val}mg`;
+          return `${drug.name}${label} ${val > 0 ? val + 'mg' : drug.standardDose + drug.unit}`;
       }
       return `${drug.name} ${drug.standardDose}${drug.unit}`;
   };
@@ -59,11 +59,14 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     const events: Omit<TreatmentEvent, 'id'>[] = [];
     selectedOptions.forEach(option => {
       const cycles = option.totalCycles || 1;
-      const frequency = option.frequencyDays || 0;
+      const frequency = option.frequencyDays || 21;
       const startDateStr = startDates[option.type] || startDates.chemo;
       const start = new Date(startDateStr);
 
-      for (let i = 0; i < cycles; i++) {
+      // 安全限制：单个方案最多生成100个日程，防止死循环
+      const safeCycles = Math.min(cycles, 100);
+
+      for (let i = 0; i < safeCycles; i++) {
         const isInitial = (i === 0);
         const eventDate = new Date(start);
         eventDate.setDate(start.getDate() + (i * frequency));
@@ -83,14 +86,29 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     setGeneratedEvents(events);
     setIsPreviewing(true);
+    setIsSuccess(false);
+  };
+
+  const handleWriteToTimeline = () => {
+      onSaveEvents(generatedEvents);
+      setIsPreviewing(false);
+      setIsSuccess(true);
+      setTimeout(() => setIsSuccess(false), 3000);
   };
 
   const typesPresent = Array.from(new Set(selectedOptions.map(o => o.type)));
 
   return (
-    <div className={`mt-6 p-4 rounded-xl border transition-all ${isLocked ? 'bg-gray-50 border-gray-100 opacity-80' : 'bg-white border-medical-100 shadow-sm'}`}>
+    <div className={`mt-6 p-4 rounded-xl border transition-all ${isLocked ? 'bg-gray-50 border-gray-100' : 'bg-white border-medical-100 shadow-sm'}`}>
       <h3 className="text-sm font-bold mb-4 flex items-center text-gray-700">自动排程生成器</h3>
       
+      {isSuccess && (
+          <div className="mb-4 p-2 bg-green-100 text-green-700 text-[10px] font-bold rounded flex items-center animate-bounce">
+              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+              日程已同步至患者档案！
+          </div>
+      )}
+
       <div className="space-y-4 mb-5">
         {typesPresent.map(type => (
             <div key={type}>
@@ -99,7 +117,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
                 </label>
                 <input 
                   type="date" 
-                  className="w-full p-2 text-sm border rounded bg-white" 
+                  className="w-full p-2 text-sm border rounded bg-white outline-none" 
                   value={startDates[type] || ''} 
                   onChange={e => !isLocked && setStartDates({...startDates, [type]: e.target.value})} 
                   disabled={isLocked} 
@@ -131,7 +149,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               {!isLocked && (
                 <div className="flex gap-2">
                     <button onClick={() => setIsPreviewing(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold">修改</button>
-                    <button onClick={() => {onSaveEvents(generatedEvents); setIsPreviewing(false);}} className="flex-1 py-2 bg-medical-600 text-white rounded-lg text-xs font-bold">写入患者日程</button>
+                    <button onClick={handleWriteToTimeline} className="flex-1 py-2 bg-medical-600 text-white rounded-lg text-xs font-bold shadow-md">写入患者日程</button>
                 </div>
               )}
           </div>
