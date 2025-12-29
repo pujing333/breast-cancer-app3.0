@@ -62,6 +62,9 @@ const erVal = getPercentage(markers.erStatus);
 const prVal = getPercentage(markers.prStatus);
 const isHRPositive = erVal > 0 || prVal > 0;
 
+// 判定高危特征
+const isClinicalHighRisk = grade === 3 || ki67 >= 30 || nStage >= 1;
+
 const needNeoadjuvant = (isHER2 || isTNBC) && (tSize > 2.0 || nStage >= 1);
 const luminalNeoadjuvant = isHRPositive && !isHER2 && (nStage >= 3 || (nStage >= 2 && grade === 3));
 
@@ -70,24 +73,37 @@ let canWaiveChemo = false;
 let waiverReason = "";
 let waiverHighlyRecommended = false;
 
-if (isHRPositive && !isHER2 && nStage <= 1) { // 涵盖 N0 和部分 N1 (RxPONDER)
+if (isHRPositive && !isHER2 && nStage <= 1) {
     if (rsScore !== null) {
-        if (rsScore < 26) {
+        // RS评分决策逻辑
+        if (rsScore < 11) {
             canWaiveChemo = true;
             waiverHighlyRecommended = true;
-            waiverReason = `RS评分 ${rsScore} (<26)，基于TAILORx/RxPONDER研究，化疗无显著获益。`;
+            waiverReason = `RS评分 ${rsScore} (极低危)，强烈建议豁免化疗。`;
+        } else if (rsScore >= 11 && rsScore < 26) {
+            // 若 RS 在 11-25 之间，需结合临床特征
+            if (isClinicalHighRisk && rsScore >= 21) {
+              canWaiveChemo = true;
+              waiverReason = `RS评分 ${rsScore}。虽属低获益区，但合并临床高危因素(G3/Ki67高/N1)，请谨慎考虑是否豁免。`;
+            } else {
+              canWaiveChemo = true;
+              waiverHighlyRecommended = (rsScore < 18);
+              waiverReason = `RS评分 ${rsScore}。研究证实化疗获益极小，建议豁免。`;
+            }
         } else {
             waiverReason = `RS评分 ${rsScore} (≥26)，建议化疗序贯内分泌。`;
         }
     } else {
         // 临床指标评估
-        if (nStage === 0 && tSize <= 1.0 && grade <= 2 && ki67 < 30) {
+        if (nStage === 0 && tSize <= 1.0 && grade <= 2 && ki67 < 15) {
             canWaiveChemo = true; 
-            waiverReason = "临床特征表现为低危，可考虑豁免化疗。建议进行基因检测明确。";
-        } else if (nStage <= 1) {
-            // 虽然不直接豁免，但提供这个选项供医生评估，或者提示基因检测
+            waiverHighlyRecommended = true;
+            waiverReason = "极低危特征，可考虑豁免化疗。";
+        } else if (!isClinicalHighRisk) {
             canWaiveChemo = true;
-            waiverReason = "腔面型早期。建议进行21/70基因检测以评估化疗获益。";
+            waiverReason = "临床特征低危。建议基因检测以确定是否可豁免化疗。";
+        } else {
+            waiverReason = "临床表现为高危(G3或Ki-67高)，化疗获益可能性大。建议基因检测确认。";
         }
     }
 }
@@ -96,7 +112,7 @@ const neoadjuvantOption: TreatmentOption = {
     id: 'path_neoadjuvant',
     title: '新辅助治疗 → 手术 → 辅助治疗',
     iconType: 'chemo',
-    description: '术前降期，评价药敏，适用于高危或需保乳患者。',
+    description: isClinicalHighRisk ? '高危患者优先考虑，降期并评价药敏。' : '术前降期，评价药敏。',
     duration: '6-8个月(术前) + 手术 + 术后',
     pros: ['直观评价药敏', '增加保乳机会'],
     cons: ['周期长'],
@@ -118,7 +134,7 @@ const conservativeOption: TreatmentOption = {
     id: 'path_conservative',
     title: '手术 → 单纯内分泌 (豁免化疗)',
     iconType: 'drug',
-    description: waiverReason || '适用于低危HR+患者，仅需口服药物治疗。',
+    description: waiverReason || '适用于低危HR+患者。',
     duration: '5-10年内分泌治疗',
     pros: ['生活质量极高', '无化疗毒性'],
     cons: ['需精准基因组评估'],
@@ -132,7 +148,7 @@ if (needNeoadjuvant || luminalNeoadjuvant) {
     conservativeOption.recommended = true;
     options.push(conservativeOption, surgeryOption);
 } else if (canWaiveChemo) {
-    surgeryOption.recommended = true; // 默认推荐手术，但同时给出豁免化疗选项
+    surgeryOption.recommended = true;
     options.push(surgeryOption, conservativeOption);
 } else {
     surgeryOption.recommended = true;
@@ -167,10 +183,12 @@ const isHER2 = subtype === MolecularSubtype.HER2Positive || (markers.her2Status 
 const isTNBC = subtype === MolecularSubtype.TripleNegative;
 const isHRPositive = erVal > 0 || prVal > 0;
 
+// 是否属于高危因素
+const isClinicalHighRisk = grade === 3 || ki67Val >= 30 || nStage >= 1;
+
 const isNeoadjuvantPath = highLevelPlan.id === 'path_neoadjuvant';
 const isConservativePath = highLevelPlan.id === 'path_conservative';
 
-// 如果选择了豁免化疗，则 chemoOptions 留空
 if (!isConservativePath) {
     if (isHER2) {
         plan.chemoOptions.push({
@@ -223,14 +241,13 @@ if (!isConservativePath) {
             });
         }
     } else if (isHRPositive) {
-        const isHighRisk = nStage >= 1 || ki67Val >= 30 || grade === 3;
         plan.chemoOptions.push({
             id: 'c_act_lum',
             name: 'AC-T 方案',
-            description: '蒽环序贯紫杉',
+            description: '蒽环序贯紫杉 (经典/密集)',
             cycle: '8周期',
             type: 'chemo',
-            recommended: isHighRisk,
+            recommended: isClinicalHighRisk, // 只要临床高危就推荐 AC-T
             totalCycles: 8,
             frequencyDays: 21,
             drugs: [
@@ -245,7 +262,7 @@ if (!isConservativePath) {
             description: '多西他赛 + 环磷酰胺',
             cycle: '4-6周期',
             type: 'chemo',
-            recommended: !isHighRisk,
+            recommended: !isClinicalHighRisk, // 只有非高危才优先推荐 TC
             totalCycles: 4,
             frequencyDays: 21,
             drugs: [
