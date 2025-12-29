@@ -30,24 +30,31 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
 
   const isLocked = !!patient.isPlanLocked;
 
-  // 实时风险评估逻辑
+  // 实时风险评估逻辑 (包含 MonarchE 阿贝西利标准)
   const riskAssessment = useMemo(() => {
     const ki67Val = parseFloat(localMarkers.ki67.replace('%', '')) || 0;
     const isG3 = localMarkers.histologicalGrade === 'G3';
-    const isNPlus = localMarkers.nodeStatus !== 'N0';
-    const isHighKi67 = ki67Val >= 30;
+    const nStage = localMarkers.nodeStatus;
+    const isNPlus = nStage !== 'N0';
+    const isHighKi67 = ki67Val >= 20; // 阿贝西利标准通常为 20%
+    const tSize = parseFloat(localMarkers.tumorSize) || 0;
     
     const factors = [];
     if (isG3) factors.push("分级G3");
-    if (isHighKi67) factors.push(`Ki-67高(${ki67Val}%)`);
-    if (isNPlus) factors.push("淋巴结阳性");
+    if (ki67Val >= 30) factors.push(`Ki-67高(${ki67Val}%)`);
+    if (isNPlus) factors.push(`淋巴结${nStage}`);
+
+    // CDK4/6i 阿贝西利判定 (MonarchE)
+    const isAbemaciclibCandidate = (nStage === 'N2' || nStage === 'N3') || 
+                                 (nStage === 'N1' && (isG3 || tSize >= 5 || ki67Val >= 20));
 
     return {
-      isHighRisk: factors.length > 0,
+      isHighRisk: factors.length > 0 || isAbemaciclibCandidate,
       factors,
       isG3,
       isHighKi67,
-      isNPlus
+      isNPlus,
+      isAbemaciclibCandidate
     };
   }, [localMarkers]);
 
@@ -169,7 +176,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             临床指标
             {riskAssessment.isHighRisk && !isLocked && (
               <span className="ml-2 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md animate-pulse">
-                检测到高危因素
+                监测到决策关键特征
               </span>
             )}
           </h3>
@@ -191,12 +198,10 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">PR 状态</label>
-            <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.prStatus} onChange={(e) => handleUpdateMarkerField('prStatus', e.target.value)}>
-              <option value="0%">0% (阴性)</option>
-              <option value="1%-10%">1%-10%</option>
-              <option value="10%-50%">10%-50%</option>
-              <option value=">50%">&gt;50%</option>
+            <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">绝经状态</label>
+            <select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={localMarkers.menopause ? 'yes' : 'no'} onChange={(e) => handleUpdateMarkerField('menopause', e.target.value === 'yes')}>
+              <option value="no">未绝经 (Pre-meno)</option>
+              <option value="yes">已绝经 (Post-meno)</option>
             </select>
           </div>
 
@@ -263,23 +268,30 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             <label className="block text-[10px] font-bold text-accent-700 mb-1 uppercase tracking-tight">基因检测 (RS/MP 评分)</label>
             <input type="text" disabled={isLocked} placeholder="例如: 18" className="w-full p-2 text-sm border border-accent-200 rounded bg-accent-50/20 outline-none placeholder:text-accent-300" value={localMarkers.geneticTestResult || ''} onChange={(e) => handleUpdateMarkerField('geneticTestResult', e.target.value)} />
           </div>
-
-          <div className="col-span-2">
-            <label className="block text-[10px] font-bold text-blue-500 mb-1 uppercase tracking-tight">血肌酐 (umol/L)</label>
-            <input type="number" disabled={isLocked} placeholder="卡铂剂量必需指标" className="w-full p-2 text-sm border border-blue-100 rounded bg-blue-50/20 outline-none" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} />
-          </div>
         </div>
 
         {/* 实时风险评估小板 */}
         {!isLocked && riskAssessment.isHighRisk && (
           <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-lg">
-             <div className="text-[10px] font-bold text-red-700 uppercase mb-1">风险画像评估 (Risk Profile)</div>
-             <div className="flex flex-wrap gap-1.5">
+             <div className="text-[10px] font-bold text-red-700 uppercase mb-1 flex items-center">
+                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" /></svg>
+                决策关键特征 (Key Drivers)
+             </div>
+             <div className="flex flex-wrap gap-1.5 mt-2">
                 {riskAssessment.factors.map(f => (
                   <span key={f} className="text-[9px] bg-white text-red-600 px-1.5 py-0.5 rounded border border-red-200 font-bold">● {f}</span>
                 ))}
+                {riskAssessment.isAbemaciclibCandidate && (
+                  <span className="text-[9px] bg-red-600 text-white px-1.5 py-0.5 rounded font-bold shadow-sm">
+                    MonarchE 高危标准符合
+                  </span>
+                )}
              </div>
-             <p className="text-[9px] text-red-500 mt-2 font-medium italic">提示：存在高危生物学特征，建议在路径分析时优先考虑强化辅助方案。</p>
+             {riskAssessment.isAbemaciclibCandidate && (
+                <p className="text-[9px] text-red-600 mt-2 font-medium bg-white/50 p-1.5 rounded border border-red-100">
+                  提示：符合强化内分泌治疗准则。建议考虑 CDK4/6 抑制剂（阿贝西利）辅助治疗 2 年。
+                </p>
+             )}
           </div>
         )}
 
@@ -351,9 +363,10 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-5">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-bold text-gray-800">用药明细确认</h3>
-            {riskAssessment.isHighRisk && (
-              <span className="text-[10px] text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded border border-red-100">
-                已根据临床高危特征优化
+            {riskAssessment.isAbemaciclibCandidate && (
+              <span className="text-[10px] text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded border border-red-100 flex items-center">
+                <span className="w-2 h-2 bg-red-500 rounded-full mr-1"></span>
+                已包含阿贝西利强化
               </span>
             )}
           </div>
@@ -375,7 +388,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           )}
           {detailedPlan.endocrineOptions.length > 0 && (
             <div>
-                <div className="text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">内分泌方案 (Endocrine)</div>
+                <div className="text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">内分泌及强化方案 (Endocrine)</div>
                 <div className="space-y-2">
                     {detailedPlan.endocrineOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="endocrineId" />)}
                 </div>
