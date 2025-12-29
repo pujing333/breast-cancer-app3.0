@@ -291,20 +291,25 @@ if (isHRPositive) {
     const needOFS = !isMeno && (nStage >= 1 || patient.age < 35 || ki67Val >= 20);
     
     // CDK4/6i 阿贝西利判定 (MonarchE)
+    // 更新标准: N2/N3 或者 N1+(G3/Ki67>=20%/T>=5cm)
     const isAbemaciclibCandidate = (nStage >= 2) || (nStage === 1 && (grade === 3 || tSize >= 5 || ki67Val >= 20));
+
+    // 排程策略修正：为了防止日程生成过多导致卡顿，内分泌治疗以“月（28天）”为排程单位。
+    // 5年 = 60个周期 (28天/周期)
+    // 2年 = 26个周期 (28天/周期)
 
     if (isMeno) {
         plan.endocrineOptions.push({
             id: 'e_ai_post',
             name: isAbemaciclibCandidate ? 'AI + 阿贝西利' : '芳香化酶抑制剂 (AI)',
             description: isAbemaciclibCandidate ? '内分泌强化方案 (MonarchE)' : '来曲唑/阿那曲唑/依西美坦',
-            cycle: 'AI(5-10年) + 阿贝西利(2年)',
+            cycle: '月度配药提醒',
             type: 'endocrine',
             recommended: true,
-            totalCycles: 730,
-            frequencyDays: 1,
+            totalCycles: 60, // 5年
+            frequencyDays: 28,
             drugs: [
-                { name: '来曲唑', standardDose: 2.5, unit: 'mg' },
+                { name: 'AI口服药', standardDose: 1, unit: 'qd' },
                 ...(isAbemaciclibCandidate ? [{ name: '阿贝西利', standardDose: 150, unit: 'mg (bid)' }] : [])
             ]
         });
@@ -313,11 +318,11 @@ if (isHRPositive) {
             plan.endocrineOptions.push({
                 id: 'e_ofs_ai_pre',
                 name: isAbemaciclibCandidate ? 'OFS + AI + 阿贝西利' : 'OFS + AI',
-                description: '卵巢功能抑制序贯/联用AI',
-                cycle: '阿贝西利强化2年',
+                description: '卵巢功能抑制+AI方案',
+                cycle: '28天/周期',
                 type: 'endocrine',
                 recommended: true,
-                totalCycles: 730,
+                totalCycles: 60, // 5年
                 frequencyDays: 28,
                 drugs: [
                     { name: '戈舍瑞林', standardDose: 3.6, unit: 'mg' }, 
@@ -330,11 +335,11 @@ if (isHRPositive) {
                 id: 'e_tam_pre',
                 name: '他莫昔芬 (TAM)',
                 description: '每日20mg',
-                cycle: 'qd x 5年',
+                cycle: '月度配药提醒',
                 type: 'endocrine',
                 recommended: true,
-                totalCycles: 1825,
-                frequencyDays: 1,
+                totalCycles: 60, // 5年
+                frequencyDays: 28,
                 drugs: [{ name: '他莫昔芬', standardDose: 20, unit: 'mg' }]
             });
         }
