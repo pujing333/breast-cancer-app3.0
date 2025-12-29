@@ -36,7 +36,7 @@ date: string;
 title: string;
 description: string;
 completed: boolean;
-type: 'medication' | 'surgery' | 'exam' | 'other';
+type: 'chemo' | 'endocrine' | 'target' | 'immune' | 'surgery' | 'exam' | 'other';
 sideEffects?: string[]; // List of side effects keys e.g. ['Nausea']
 dosageDetails?: string; // 用于在日程中显示锁定的剂量详情
 }
