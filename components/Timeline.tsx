@@ -18,7 +18,7 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
   const [selectedDateStr, setSelectedDateStr] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const [newEvent, setNewEvent] = useState<Partial<TreatmentEvent>>({
-    type: 'medication' as any,
+    type: 'chemo' as any,
     date: selectedDateStr,
     completed: false
   });
@@ -100,12 +100,13 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
 
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm h-full flex flex-col relative">
+      {/* 不良反应记录与建议弹窗 */}
       {activeEvent && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
                   <div className="p-4 border-b flex justify-between items-center bg-gray-50">
                       <div>
-                        <h3 className="text-lg font-bold text-gray-800">记录不良反应</h3>
+                        <h3 className="text-lg font-bold text-gray-800">不良反应记录</h3>
                         <p className="text-xs text-gray-500">{activeEvent.title} ({activeEvent.date})</p>
                       </div>
                       <button onClick={() => setActiveEvent(null)} className="text-gray-400">
@@ -113,7 +114,8 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
                       </button>
                   </div>
                   <div className="flex-1 overflow-y-auto p-5">
-                      <div className="flex flex-wrap gap-2 mb-6">
+                      <div className="mb-4 text-[11px] text-gray-400 font-bold uppercase">选择出现的症状</div>
+                      <div className="flex flex-wrap gap-2 mb-8">
                           {Object.keys(COMMON_SIDE_EFFECTS).map(effect => (
                               <button
                                   key={effect}
@@ -124,10 +126,48 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
                               </button>
                           ))}
                       </div>
+
+                      {/* 专家建议区域 (Management Guide) */}
+                      {selectedEffects.length > 0 && (
+                          <div className="space-y-6 animate-fade-in border-t pt-6">
+                              <div className="text-xs font-bold text-medical-600 flex items-center">
+                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                  专家处理建议
+                              </div>
+                              {selectedEffects.map(effect => {
+                                  const guide = COMMON_SIDE_EFFECTS[effect];
+                                  if (!guide) return null;
+                                  return (
+                                      <div key={effect} className="bg-medical-50/50 rounded-xl p-4 border border-medical-100 shadow-sm">
+                                          <div className="font-bold text-sm text-gray-800 mb-3 flex items-center">
+                                              <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                                              {effect}
+                                          </div>
+                                          <div className="space-y-3">
+                                              <div>
+                                                  <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">应对策略 (Strategies)</div>
+                                                  <ul className="text-xs text-gray-600 space-y-1 list-disc pl-4">
+                                                      {guide.strategies.map((s, i) => <li key={i}>{s}</li>)}
+                                                  </ul>
+                                              </div>
+                                              <div>
+                                                  <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">参考药物 (Medications)</div>
+                                                  <div className="flex flex-wrap gap-1">
+                                                      {guide.medications.map((m, i) => (
+                                                          <span key={i} className="text-[10px] bg-white border border-medical-200 text-medical-700 px-2 py-0.5 rounded-full">{m}</span>
+                                                      ))}
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  );
+                              })}
+                          </div>
+                      )}
                   </div>
                   <div className="p-4 border-t bg-gray-50 flex gap-3">
                       <button onClick={() => setActiveEvent(null)} className="flex-1 py-2.5 border rounded-lg text-gray-600 text-sm">取消</button>
-                      <button onClick={saveSideEffects} className="flex-1 py-2.5 bg-medical-600 text-white rounded-lg text-sm font-medium">保存</button>
+                      <button onClick={saveSideEffects} className="flex-1 py-2.5 bg-medical-600 text-white rounded-lg text-sm font-medium shadow-md">保存记录</button>
                   </div>
               </div>
           </div>
@@ -182,8 +222,10 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
                     const isSelected = selectedDateStr === dateString;
                     const isToday = new Date().toISOString().split('T')[0] === dateString;
                     const dayEvents = eventsByDate[dateString] || [];
+                    const hasSideEffects = dayEvents.some(e => e.sideEffects && e.sideEffects.length > 0);
+
                     return (
-                        <div key={d} onClick={() => setSelectedDateStr(dateString)} className={`h-12 rounded-lg flex flex-col items-center justify-start pt-1 cursor-pointer transition-all border ${isSelected ? 'bg-medical-50 border-medical-500' : isToday ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-transparent'}`}>
+                        <div key={d} onClick={() => setSelectedDateStr(dateString)} className={`h-12 rounded-lg flex flex-col items-center justify-start pt-1 cursor-pointer transition-all border ${isSelected ? 'bg-medical-50 border-medical-500' : isToday ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-transparent'} ${hasSideEffects ? 'ring-1 ring-red-300' : ''}`}>
                             <span className={`text-sm font-medium ${isToday ? 'text-yellow-700' : 'text-gray-700'}`}>{d}</span>
                             <div className="flex gap-0.5 mt-1 flex-wrap justify-center px-1">
                                 {dayEvents.slice(0, 4).map((evt, i) => (
@@ -211,15 +253,18 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
                          <p className="text-[10px] text-gray-400 uppercase tracking-wide">{getTypeLabel(event.type)}</p>
                     </div>
                     {onUpdateEvent && (
-                        <button onClick={() => openSideEffectModal(event)} className="text-[10px] text-medical-600 border px-1.5 py-0.5 rounded">不良反应</button>
+                        <button onClick={() => openSideEffectModal(event)} className={`text-[10px] border px-1.5 py-0.5 rounded font-bold transition-colors ${event.sideEffects && event.sideEffects.length > 0 ? 'bg-red-500 text-white border-red-500' : 'text-medical-600 border-medical-200'}`}>不良反应</button>
                     )}
                 </div>
                 {event.dosageDetails && <div className="mt-1.5 text-[10px] bg-blue-50 text-blue-700 p-1.5 rounded font-mono">{event.dosageDetails}</div>}
                 {event.description && <p className="text-[11px] text-gray-500 mt-1">{event.description}</p>}
                 {event.sideEffects && event.sideEffects.length > 0 && (
-                    <div className="mt-2 bg-red-50 p-2 rounded border border-red-100">
-                        <h5 className="text-[9px] font-bold text-red-800 mb-1">记录症状:</h5>
-                        <div className="flex flex-wrap gap-1">{event.sideEffects.map((s, idx) => <span key={idx} className="text-[9px] bg-white px-1.5 py-0.5 rounded border border-red-200 text-red-600">{s}</span>)}</div>
+                    <div className="mt-2 bg-red-50 p-2 rounded border border-red-100 animate-fade-in">
+                        <h5 className="text-[9px] font-bold text-red-800 mb-1 uppercase">当前记录症状:</h5>
+                        <div className="flex flex-wrap gap-1">
+                            {event.sideEffects.map((s, idx) => <span key={idx} className="text-[9px] bg-white px-1.5 py-0.5 rounded border border-red-200 text-red-600 font-medium">{s}</span>)}
+                        </div>
+                        <div className="mt-2 text-[8px] text-gray-400 italic">点击上方“不良反应”按钮查看专家建议</div>
                     </div>
                 )}
             </div>
