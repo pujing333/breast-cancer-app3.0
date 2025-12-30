@@ -290,7 +290,7 @@ if (isHRPositive) {
     const needOFS = !isMeno && (nStage >= 1 || patient.age < 35 || ki67Val >= 20);
     const isAbemaciclibCandidate = (nStage >= 2) || (nStage === 1 && (grade === 3 || tSize >= 5 || ki67Val >= 20));
 
-    // 内分泌治疗排程回归：恢复每日服药模式，总计5年 (1825天)
+    // 内分泌治疗排程优化：缩减至 3 年 (1095天) 以提高系统性能
     if (isMeno) {
         plan.endocrineOptions.push({
             id: 'e_ai_post',
@@ -299,8 +299,8 @@ if (isHRPositive) {
             cycle: '每日口服',
             type: 'endocrine',
             recommended: true,
-            totalCycles: 1825, // 5年每日
-            frequencyDays: 1,  // 每日
+            totalCycles: 1095, // 改为 3 年
+            frequencyDays: 1, 
             drugs: [
                 { name: 'AI口服药', standardDose: 1, unit: 'qd' },
                 ...(isAbemaciclibCandidate ? [{ name: '阿贝西利', standardDose: 150, unit: 'mg (bid)' }] : [])
@@ -315,7 +315,7 @@ if (isHRPositive) {
                 cycle: '每日口服 (OFS 28天/针)',
                 type: 'endocrine',
                 recommended: true,
-                totalCycles: 1825,
+                totalCycles: 1095, // 改为 3 年
                 frequencyDays: 1, 
                 drugs: [
                     { name: '戈舍瑞林', standardDose: 3.6, unit: 'mg' }, 
@@ -331,7 +331,7 @@ if (isHRPositive) {
                 cycle: '每日口服',
                 type: 'endocrine',
                 recommended: true,
-                totalCycles: 1825,
+                totalCycles: 1095, // 改为 3 年
                 frequencyDays: 1,
                 drugs: [{ name: '他莫昔芬', standardDose: 20, unit: 'mg' }]
             });
