@@ -63,8 +63,8 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
       const startDateStr = startDates[option.type] || startDates.chemo;
       const start = new Date(startDateStr);
 
-      // 提高上限以支持 5 年每日服药 (1825天)
-      const safeCycles = Math.min(cycles, 2000);
+      // 安全阈值调整：支持 3 年每日服药 (约 1100 天)
+      const safeCycles = Math.min(cycles, 1500);
 
       for (let i = 0; i < safeCycles; i++) {
         const isInitial = (i === 0);
@@ -77,7 +77,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
           title: frequency === 1 ? `${option.name}` : `${option.name} (第${i + 1}周期)`,
           description: `${option.cycle}`,
           date: eventDate.toISOString().split('T')[0],
-          type: option.type as any, // 关键：注入具体的类型以供日历颜色渲染
+          type: option.type as any,
           completed: false,
           dosageDetails: dosageInfo
         });
@@ -113,11 +113,11 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
       )}
 
       <div className="space-y-4 mb-5">
-        <div className="text-[9px] text-gray-400 italic">您可以手动修改不同治疗类型的开始日期。</div>
+        <div className="text-[9px] text-gray-400 italic">建议设置 3 年内的内分泌服药排程。</div>
         {typesPresent.map(type => (
             <div key={type} className={`p-2 rounded border ${type === 'chemo' ? 'bg-red-50 border-red-100' : type === 'endocrine' ? 'bg-blue-50 border-blue-100' : 'bg-green-50 border-green-100'}`}>
                 <label className={`block text-[10px] font-bold mb-1 uppercase tracking-wider ${type === 'chemo' ? 'text-red-600' : type === 'endocrine' ? 'text-blue-600' : 'text-green-600'}`}>
-                    {type === 'chemo' ? '化疗 (红色标识)' : type === 'endocrine' ? '内分泌 (蓝色标识)' : '靶向/免疫 (绿色标识)'} 开始日期
+                    {type === 'chemo' ? '化疗' : type === 'endocrine' ? '内分泌' : '靶向/免疫'} 开始日期
                 </label>
                 <input 
                   type="date" 
