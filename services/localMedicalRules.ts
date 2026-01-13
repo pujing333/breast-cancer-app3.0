@@ -205,51 +205,47 @@ if (!isConservativePath) {
         if (isNeoadjuvantPath) {
             plan.chemoOptions.push({
                 id: 'c_kn522',
-                name: 'TP-AC (KN522模式)',
+                name: 'TP-AC (序贯)',
                 description: '紫杉+卡铂 → AC',
-                cycle: '术前 8周期',
+                cycle: '术前序贯',
                 type: 'chemo',
                 recommended: true,
                 totalCycles: 8,
                 frequencyDays: 21,
-                drugs: [
-                    { name: '紫杉醇', standardDose: 80, unit: 'mg/m²' },
-                    { name: '卡铂', standardDose: 5, unit: 'AUC' }, 
-                    { name: '多柔比星', standardDose: 60, unit: 'mg/m²' },
-                    { name: '环磷酰胺', standardDose: 600, unit: 'mg/m²' }
+                stages: [
+                    { name: '紫杉+卡铂阶段', cycles: 4, drugs: [{ name: '紫杉醇', standardDose: 80, unit: 'mg/m²' }, { name: '卡铂', standardDose: 5, unit: 'AUC' }] },
+                    { name: 'AC 阶段', cycles: 4, drugs: [{ name: '多柔比星', standardDose: 60, unit: 'mg/m²' }, { name: '环磷酰胺', standardDose: 600, unit: 'mg/m²' }] }
                 ]
             });
         } else {
             plan.chemoOptions.push({
                 id: 'c_dd_act',
-                name: 'ddAC-T (密集型)',
+                name: 'ddAC-T (序贯)',
                 description: 'AC (q2w) → T (q2w)',
-                cycle: '8周期',
+                cycle: '8周期序贯',
                 type: 'chemo',
                 recommended: true,
                 totalCycles: 8,
                 frequencyDays: 14,
-                drugs: [
-                    { name: '多柔比星', standardDose: 60, unit: 'mg/m²' },
-                    { name: '环磷酰胺', standardDose: 600, unit: 'mg/m²' },
-                    { name: '紫杉醇', standardDose: 175, unit: 'mg/m²' }
+                stages: [
+                    { name: 'ddAC 阶段', cycles: 4, drugs: [{ name: '多柔比星', standardDose: 60, unit: 'mg/m²' }, { name: '环磷酰胺', standardDose: 600, unit: 'mg/m²' }] },
+                    { name: 'ddT 阶段', cycles: 4, drugs: [{ name: '紫杉醇', standardDose: 175, unit: 'mg/m²' }] }
                 ]
             });
         }
     } else if (isHRPositive) {
         plan.chemoOptions.push({
             id: 'c_act_lum',
-            name: 'AC-T 方案',
-            description: '蒽环序贯紫杉 (经典/密集)',
-            cycle: '8周期',
+            name: 'AC-T (序贯)',
+            description: '蒽环序贯紫杉',
+            cycle: '8周期序贯',
             type: 'chemo',
             recommended: isClinicalHighRisk, 
             totalCycles: 8,
             frequencyDays: 21,
-            drugs: [
-                { name: '表柔比星', standardDose: 90, unit: 'mg/m²' },
-                { name: '环磷酰胺', standardDose: 600, unit: 'mg/m²' },
-                { name: '多西他赛', standardDose: 75, unit: 'mg/m²' }
+            stages: [
+                { name: 'AC 阶段', cycles: 4, drugs: [{ name: '表柔比星', standardDose: 90, unit: 'mg/m²' }, { name: '环磷酰胺', standardDose: 600, unit: 'mg/m²' }] },
+                { name: 'T 阶段', cycles: 4, drugs: [{ name: '多西他赛', standardDose: 75, unit: 'mg/m²' }] }
             ]
         });
         plan.chemoOptions.push({
@@ -290,7 +286,6 @@ if (isHRPositive) {
     const needOFS = !isMeno && (nStage >= 1 || patient.age < 35 || ki67Val >= 20);
     const isAbemaciclibCandidate = (nStage >= 2) || (nStage === 1 && (grade === 3 || tSize >= 5 || ki67Val >= 20));
 
-    // 内分泌治疗排程优化：缩减至 3 年 (1095天) 以提高系统性能
     if (isMeno) {
         plan.endocrineOptions.push({
             id: 'e_ai_post',
@@ -299,7 +294,7 @@ if (isHRPositive) {
             cycle: '每日口服',
             type: 'endocrine',
             recommended: true,
-            totalCycles: 1095, // 改为 3 年
+            totalCycles: 1095, 
             frequencyDays: 1, 
             drugs: [
                 { name: 'AI口服药', standardDose: 1, unit: 'qd' },
@@ -315,7 +310,7 @@ if (isHRPositive) {
                 cycle: '每日口服 (OFS 28天/针)',
                 type: 'endocrine',
                 recommended: true,
-                totalCycles: 1095, // 改为 3 年
+                totalCycles: 1095, 
                 frequencyDays: 1, 
                 drugs: [
                     { name: '戈舍瑞林', standardDose: 3.6, unit: 'mg' }, 
@@ -331,7 +326,7 @@ if (isHRPositive) {
                 cycle: '每日口服',
                 type: 'endocrine',
                 recommended: true,
-                totalCycles: 1095, // 改为 3 年
+                totalCycles: 1095, 
                 frequencyDays: 1,
                 drugs: [{ name: '他莫昔芬', standardDose: 20, unit: 'mg' }]
             });
