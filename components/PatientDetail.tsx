@@ -21,9 +21,14 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
       ...evt,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
     }));
+    
+    // 关键修复：覆盖模式。先清除原有的自动化治疗事件（chemo, endocrine, target, immune）
+    const treatmentTypes = ['chemo', 'endocrine', 'target', 'immune'];
+    const filteredTimeline = patient.timeline.filter(e => !treatmentTypes.includes(e.type));
+
     onUpdatePatient({
       ...patient,
-      timeline: [...patient.timeline, ...newEvents]
+      timeline: [...filteredTimeline, ...newEvents]
     });
     setActiveTab('timeline');
   };
