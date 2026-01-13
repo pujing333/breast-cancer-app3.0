@@ -41,6 +41,11 @@ const handleUpdatePatient = (updated: Patient) => {
 setPatients(prev => prev.map(p => p.id === updated.id ? updated : p));
 };
 
+const handleDeletePatient = (id: string) => {
+    setPatients(prev => prev.filter(p => p.id !== id));
+    if (selectedPatientId === id) setSelectedPatientId(null);
+};
+
 const handleAddPatientClick = () => {
 setIsAddingPatient(true);
 setSelectedPatientId(null);
@@ -125,6 +130,7 @@ onImport={handleImportData}
 patients={patients}
 onSelectPatient={handleSelectPatient}
 onAddPatient={handleAddPatientClick}
+onDeletePatient={handleDeletePatient}
 />
 </>
 )}
