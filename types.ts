@@ -61,6 +61,12 @@ lockedDose?: string; // 保存时计算出的具体剂量 (维持剂量)
 lockedLoadingDose?: string; // 保存时计算出的具体剂量 (首剂剂量)
 }
 
+export interface RegimenStage {
+name: string;
+cycles: number;
+drugs: DrugDetail[];
+}
+
 export interface RegimenOption {
 id: string;
 name: string; 
@@ -70,6 +76,7 @@ type: 'chemo' | 'endocrine' | 'target' | 'immune';
 recommended: boolean;
 reasoning?: string; 
 drugs?: DrugDetail[]; 
+stages?: RegimenStage[]; // 支持序贯治疗
 totalCycles?: number; 
 frequencyDays?: number; 
 pros?: string[]; 
