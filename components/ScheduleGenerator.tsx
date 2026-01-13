@@ -58,29 +58,53 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
   const handleGenerate = () => {
     const events: Omit<TreatmentEvent, 'id'>[] = [];
     selectedOptions.forEach(option => {
-      const cycles = option.totalCycles || 1;
       const frequency = option.frequencyDays || 21;
       const startDateStr = startDates[option.type] || startDates.chemo;
-      const start = new Date(startDateStr);
+      let currentStartDate = new Date(startDateStr);
 
-      // 安全阈值调整：支持 3 年每日服药 (约 1100 天)
-      const safeCycles = Math.min(cycles, 1500);
+      if (option.stages && option.stages.length > 0) {
+        // 处理序贯治疗逻辑
+        option.stages.forEach(stage => {
+          for (let i = 0; i < stage.cycles; i++) {
+            const isInitial = (i === 0 && events.filter(e => e.type === option.type).length === 0);
+            const eventDate = new Date(currentStartDate);
+            eventDate.setDate(currentStartDate.getDate() + (i * frequency));
+            
+            const dosageInfo = stage.drugs.map(d => getDoseString(d, isInitial)).join(' + ');
 
-      for (let i = 0; i < safeCycles; i++) {
-        const isInitial = (i === 0);
-        const eventDate = new Date(start);
-        eventDate.setDate(start.getDate() + (i * frequency));
-        
-        const dosageInfo = option.drugs?.map(d => getDoseString(d, isInitial)).join(' + ');
-
-        events.push({
-          title: frequency === 1 ? `${option.name}` : `${option.name} (第${i + 1}周期)`,
-          description: `${option.cycle}`,
-          date: eventDate.toISOString().split('T')[0],
-          type: option.type as any,
-          completed: false,
-          dosageDetails: dosageInfo
+            events.push({
+              title: `${option.name} - ${stage.name} (C${i + 1})`,
+              description: `${option.cycle}`,
+              date: eventDate.toISOString().split('T')[0],
+              type: option.type as any,
+              completed: false,
+              dosageDetails: dosageInfo
+            });
+          }
+          // 更新下一阶段的起始日期：当前起始日期 + 阶段总天数
+          currentStartDate = new Date(currentStartDate);
+          currentStartDate.setDate(currentStartDate.getDate() + (stage.cycles * frequency));
         });
+      } else {
+        // 处理普通治疗逻辑
+        const cycles = option.totalCycles || 1;
+        const safeCycles = Math.min(cycles, 1500);
+        for (let i = 0; i < safeCycles; i++) {
+          const isInitial = (i === 0);
+          const eventDate = new Date(currentStartDate);
+          eventDate.setDate(currentStartDate.getDate() + (i * frequency));
+          
+          const dosageInfo = option.drugs?.map(d => getDoseString(d, isInitial)).join(' + ');
+
+          events.push({
+            title: frequency === 1 ? `${option.name}` : `${option.name} (第${i + 1}周期)`,
+            description: `${option.cycle}`,
+            date: eventDate.toISOString().split('T')[0],
+            type: option.type as any,
+            completed: false,
+            dosageDetails: dosageInfo
+          });
+        }
       }
     });
     events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -113,7 +137,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
       )}
 
       <div className="space-y-4 mb-5">
-        <div className="text-[9px] text-gray-400 italic">建议设置 3 年内的内分泌服药排程。</div>
+        <div className="text-[9px] text-gray-400 italic">您设定的开始日期将严格同步到日历。</div>
         {typesPresent.map(type => (
             <div key={type} className={`p-2 rounded border ${type === 'chemo' ? 'bg-red-50 border-red-100' : type === 'endocrine' ? 'bg-blue-50 border-blue-100' : 'bg-green-50 border-green-100'}`}>
                 <label className={`block text-[10px] font-bold mb-1 uppercase tracking-wider ${type === 'chemo' ? 'text-red-600' : type === 'endocrine' ? 'text-blue-600' : 'text-green-600'}`}>
