@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Patient, MolecularSubtype } from '../types';
 
@@ -5,9 +6,10 @@ interface PatientListProps {
   patients: Patient[];
   onSelectPatient: (patient: Patient) => void;
   onAddPatient: () => void;
+  onDeletePatient?: (id: string) => void;
 }
 
-export const PatientList: React.FC<PatientListProps> = ({ patients, onSelectPatient, onAddPatient }) => {
+export const PatientList: React.FC<PatientListProps> = ({ patients, onSelectPatient, onAddPatient, onDeletePatient }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredPatients = patients.filter(p => 
@@ -21,6 +23,13 @@ export const PatientList: React.FC<PatientListProps> = ({ patients, onSelectPati
       case MolecularSubtype.HER2Positive: return 'bg-pink-100 text-pink-800';
       case MolecularSubtype.TripleNegative: return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-600';
+    }
+  };
+
+  const handleDelete = (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
+    if (window.confirm(`确定要删除患者 "${name}" 的所有档案吗？此操作不可撤销。`)) {
+      onDeletePatient?.(id);
     }
   };
 
@@ -50,16 +59,24 @@ export const PatientList: React.FC<PatientListProps> = ({ patients, onSelectPati
           <div 
             key={patient.id}
             onClick={() => onSelectPatient(patient)}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 active:scale-[0.98] transition-transform duration-100"
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 active:scale-[0.98] transition-all duration-100 relative group"
           >
             <div className="flex justify-between items-start mb-2">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">{patient.name} <span className="text-sm font-normal text-gray-500 ml-1">{patient.age}岁</span></h3>
                 <p className="text-xs text-gray-400">ID: {patient.mrn}</p>
               </div>
-              <span className={`px-2 py-1 rounded-md text-xs font-medium ${getSubtypeColor(patient.subtype)}`}>
-                {patient.subtype}
-              </span>
+              <div className="flex items-center gap-2">
+                  <span className={`px-2 py-1 rounded-md text-xs font-medium ${getSubtypeColor(patient.subtype)}`}>
+                    {patient.subtype}
+                  </span>
+                  <button 
+                    onClick={(e) => handleDelete(e, patient.id, patient.name)}
+                    className="p-1.5 text-red-400 hover:text-red-600 active:bg-red-50 rounded-full transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+              </div>
             </div>
             
             <div className="flex items-center justify-between mt-3">
@@ -83,7 +100,7 @@ export const PatientList: React.FC<PatientListProps> = ({ patients, onSelectPati
       {/* FAB Add Button */}
       <button 
         onClick={onAddPatient}
-        className="fixed bottom-6 right-6 bg-medical-600 text-white rounded-full p-4 shadow-lg hover:bg-medical-500 transition-colors"
+        className="fixed bottom-6 right-6 bg-medical-600 text-white rounded-full p-4 shadow-lg hover:bg-medical-500 transition-colors z-50"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
