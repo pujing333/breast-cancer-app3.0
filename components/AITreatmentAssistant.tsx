@@ -79,9 +79,11 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     } else if (unit === 'auc') {
       const scrVal = parseFloat(localMarkers.serumCreatinine || '0');
       if (scrVal > 0) {
+        // Cockcroft-Gault formula to estimate GFR
         const gfr = ((140 - patient.age) * w * 1.04) / scrVal;
+        // Calvert formula: Dose (mg) = target AUC × (GFR + 25)
         val = Math.round(doseToUse * (gfr + 25));
-      } else return "--";
+      } else return "需血肌酐";
     } else {
       val = doseToUse;
     }
@@ -100,6 +102,14 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
       alert("请先完善患者身高体重数据。");
       return;
     }
+    
+    // 检查是否包含 AUC 方案但未填肌酐
+    const needsScr = optionsToCalculate.some(opt => opt.drugs?.some(d => d.unit.toLowerCase() === 'auc'));
+    if (needsScr && (!localMarkers.serumCreatinine || parseFloat(localMarkers.serumCreatinine) <= 0)) {
+        alert("当前方案包含卡铂(AUC计算)，请先输入有效的“血肌酐”值。");
+        return;
+    }
+
     if (window.confirm("确定要锁定当前方案吗？锁定后剂量将固定，病理指标将不可修改。")) {
       const planToLock: DetailedRegimenPlan = JSON.parse(JSON.stringify(detailedPlan));
       const processCategory = (opts: RegimenOption[], selectedId?: string) => {
@@ -144,9 +154,9 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           {isSelected && isLocked && <span className="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">已固化</span>}
         </div>
         <p className="text-[11px] text-gray-500 mb-2">{opt.description}</p>
-        {isSelected && opt.drugs && (
+        {isSelected && (opt.drugs || (opt.stages && opt.stages[0]?.drugs)) && (
           <div className="space-y-1">
-            {opt.drugs.map((drug, i) => (
+            {(opt.drugs || opt.stages?.[0]?.drugs)?.map((drug, i) => (
               <div key={i} className="flex justify-between text-[11px] bg-white/60 p-1.5 rounded border border-white">
                 <span className="text-gray-600">{drug.name}</span>
                 <span className={`font-bold ${isLocked ? 'text-blue-600' : 'text-medical-600'}`}>
@@ -173,7 +183,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
       <section className={`p-4 rounded-xl border transition-all ${isLocked ? 'bg-blue-50/20 border-blue-100' : 'bg-white border-gray-100 shadow-sm'}`}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-sm font-bold text-gray-700 flex items-center">
-            临床指标
+            临床指标与化验结果
             {riskAssessment.isHighRisk && !isLocked && (
               <span className="ml-2 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md animate-pulse">
                 监测到决策关键特征
@@ -264,9 +274,26 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               <option value="G3">G3 (低分化)</option>
             </select>
           </div>
+          
           <div className="relative">
             <label className="block text-[10px] font-bold text-accent-700 mb-1 uppercase tracking-tight">基因检测 (RS/MP 评分)</label>
             <input type="text" disabled={isLocked} placeholder="例如: 18" className="w-full p-2 text-sm border border-accent-200 rounded bg-accent-50/20 outline-none placeholder:text-accent-300" value={localMarkers.geneticTestResult || ''} onChange={(e) => handleUpdateMarkerField('geneticTestResult', e.target.value)} />
+          </div>
+
+          {/* 新增/回归：血肌酐输入项 */}
+          <div className="col-span-2 mt-1">
+            <label className="block text-[10px] font-bold text-blue-700 mb-1 uppercase tracking-tight flex items-center">
+              血肌酐 (Serum Creatinine / umol/L)
+              <span className="ml-2 text-[9px] font-normal text-blue-500 normal-case italic">用于卡铂 AUC 剂量计算</span>
+            </label>
+            <input 
+              type="number" 
+              disabled={isLocked} 
+              placeholder="请输入患者血肌酐值，例如: 75" 
+              className={`w-full p-2.5 text-sm border rounded bg-white outline-none shadow-inner transition-all ${!localMarkers.serumCreatinine ? 'border-blue-200 bg-blue-50/30' : 'border-blue-500 bg-white ring-1 ring-blue-100'}`} 
+              value={localMarkers.serumCreatinine || ''} 
+              onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} 
+            />
           </div>
         </div>
 
@@ -287,11 +314,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                   </span>
                 )}
              </div>
-             {riskAssessment.isAbemaciclibCandidate && (
-                <p className="text-[9px] text-red-600 mt-2 font-medium bg-white/50 p-1.5 rounded border border-red-100">
-                  提示：符合强化内分泌治疗准则。建议考虑 CDK4/6 抑制剂（阿贝西利）辅助治疗 2 年。
-                </p>
-             )}
           </div>
         )}
 
@@ -330,11 +352,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                   {o.recommended && !isLocked && <span className="text-[10px] bg-medical-600 text-white px-2 py-0.5 rounded-full">指南推荐</span>}
                 </div>
                 <div className="text-[11px] text-gray-500 mt-1 leading-relaxed">{o.description}</div>
-                {isSelected && o.pros && o.pros.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {o.pros.map((p, i) => <span key={i} className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{p}</span>)}
-                  </div>
-                )}
               </div>
             );
           })}
