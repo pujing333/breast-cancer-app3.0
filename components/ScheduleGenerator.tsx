@@ -32,26 +32,42 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
   const [isSuccess, setIsSuccess] = useState(false);
 
   const getDoseString = (drug: DrugDetail, isInitial: boolean) => {
+      // 优先使用已经固化的剂量
       if (isInitial && drug.lockedLoadingDose) return `${drug.name}(首剂) ${drug.lockedLoadingDose}`;
       if (!isInitial && drug.lockedDose) return `${drug.name} ${drug.lockedDose}`;
       
-      if (patientHeight && patientWeight) {
-          const bsa = Math.max(0, 0.0061 * patientHeight + 0.0128 * patientWeight - 0.1529);
+      // 如果未固化，实时计算（预览模式）
+      const h = Number(patientHeight) || 0;
+      const w = Number(patientWeight) || 0;
+      const age = Number(patientAge) || 50;
+
+      if (h > 0 && w > 0) {
+          const bsa = Math.max(0, 0.0061 * h + 0.0128 * w - 0.1529);
           const doseToUse = (isInitial && drug.loadingDose) ? drug.loadingDose : drug.standardDose;
           const label = (isInitial && drug.loadingDose) ? '(首剂)' : '';
+          const unit = drug.unit.toUpperCase();
           
           let val = 0;
-          if (drug.unit === 'mg/m²' || drug.unit === 'mg/m2') val = Math.round(doseToUse * bsa);
-          else if (drug.unit === 'mg/kg') val = Math.round(doseToUse * patientWeight);
-          else if (drug.unit === 'AUC' && scr && patientAge) {
+          if (unit.includes('M2') || unit.includes('M²')) {
+              val = Math.round(doseToUse * bsa);
+          } else if (unit.includes('KG')) {
+              val = Math.round(doseToUse * w);
+          } else if (unit === 'AUC' && scr) {
               const scrVal = parseFloat(scr);
-              const gfr = ((140 - patientAge) * patientWeight * 1.04) / scrVal;
-              val = Math.round(doseToUse * (gfr + 25));
-          } else if (drug.unit === 'mg') val = doseToUse;
-          else if (drug.unit === 'qd' || drug.unit === 'bid') return `${drug.name} ${drug.standardDose} ${drug.unit}`;
+              if (scrVal > 0) {
+                const gfr = ((140 - age) * w * 1.04) / scrVal;
+                val = Math.round(doseToUse * (gfr + 25));
+              }
+          } else if (unit === 'MG') {
+              val = doseToUse;
+          } else if (unit === 'QD' || unit === 'BID') {
+              return `${drug.name} ${drug.standardDose} ${drug.unit}`;
+          }
 
-          return `${drug.name}${label} ${val > 0 ? val + 'mg' : drug.standardDose + drug.unit}`;
+          if (val > 0) return `${drug.name}${label} ${val}mg`;
       }
+      
+      // 兜底返回原始剂量
       return `${drug.name} ${drug.standardDose}${drug.unit}`;
   };
 
@@ -63,7 +79,6 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
       let currentStartDate = new Date(startDateStr);
 
       if (option.stages && option.stages.length > 0) {
-        // 处理序贯治疗逻辑
         option.stages.forEach(stage => {
           for (let i = 0; i < stage.cycles; i++) {
             const isInitial = (i === 0 && events.filter(e => e.type === option.type).length === 0);
@@ -81,12 +96,10 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               dosageDetails: dosageInfo
             });
           }
-          // 更新下一阶段的起始日期：当前起始日期 + 阶段总天数
           currentStartDate = new Date(currentStartDate);
           currentStartDate.setDate(currentStartDate.getDate() + (stage.cycles * frequency));
         });
       } else {
-        // 处理普通治疗逻辑
         const cycles = option.totalCycles || 1;
         const safeCycles = Math.min(cycles, 1500);
         for (let i = 0; i < safeCycles; i++) {
@@ -172,6 +185,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
                             <span className="text-gray-400 font-mono">{e.date}</span>
                             <span className="font-bold text-gray-700">{e.title}</span>
                           </div>
+                          {e.dosageDetails && <div className="text-[9px] text-medical-600 mt-1 font-mono">{e.dosageDetails}</div>}
                       </div>
                   ))}
                   {generatedEvents.length > 10 && <div className="text-center text-[9px] text-gray-400 py-1">... 剩余 {generatedEvents.length - 10} 项已省略预览 ...</div>}
