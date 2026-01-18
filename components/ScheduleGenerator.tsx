@@ -27,16 +27,26 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     target: new Date().toISOString().split('T')[0],
     immune: new Date().toISOString().split('T')[0]
   });
+  
+  // 用于追踪哪些日期是被用户手动修改过的，以便进行同步
+  const [manualDates, setManualDates] = useState<Set<string>>(new Set());
+
   const [generatedEvents, setGeneratedEvents] = useState<Omit<TreatmentEvent, 'id'>[]>([]);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
+  // 安全的日期格式化，避免时区导致的“差一天”问题
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const getDoseString = (drug: DrugDetail, isInitial: boolean) => {
-      // 优先使用已经固化的剂量
       if (isInitial && drug.lockedLoadingDose) return `${drug.name}(首剂) ${drug.lockedLoadingDose}`;
       if (!isInitial && drug.lockedDose) return `${drug.name} ${drug.lockedDose}`;
       
-      // 如果未固化，实时计算（预览模式）
       const h = Number(patientHeight) || 0;
       const w = Number(patientWeight) || 0;
       const age = Number(patientAge) || 50;
@@ -52,8 +62,8 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
               val = Math.round(doseToUse * bsa);
           } else if (unit.includes('KG')) {
               val = Math.round(doseToUse * w);
-          } else if (unit === 'AUC' && scr) {
-              const scrVal = parseFloat(scr);
+          } else if (unit === 'AUC') {
+              const scrVal = parseFloat(scr || '0');
               if (scrVal > 0) {
                 const gfr = ((140 - age) * w * 1.04) / scrVal;
                 val = Math.round(doseToUse * (gfr + 25));
@@ -67,8 +77,25 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
           if (val > 0) return `${drug.name}${label} ${val}mg`;
       }
       
-      // 兜底返回原始剂量
       return `${drug.name} ${drug.standardDose}${drug.unit}`;
+  };
+
+  const handleDateChange = (type: string, value: string) => {
+    const newDates = { ...startDates, [type]: value };
+    const newManual = new Set(manualDates);
+    newManual.add(type);
+
+    // 如果修改的是“化疗”日期，且其他日期尚未被手动修改，则进行同步
+    if (type === 'chemo') {
+      ['endocrine', 'target', 'immune'].forEach(t => {
+        if (!newManual.has(t)) {
+          newDates[t] = value;
+        }
+      });
+    }
+
+    setStartDates(newDates);
+    setManualDates(newManual);
   };
 
   const handleGenerate = () => {
@@ -76,43 +103,46 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     selectedOptions.forEach(option => {
       const frequency = option.frequencyDays || 21;
       const startDateStr = startDates[option.type] || startDates.chemo;
-      let currentStartDate = new Date(startDateStr);
+      
+      // 使用 local time 避免时区偏移
+      const [y, m, d] = startDateStr.split('-').map(Number);
+      let currentStartDate = new Date(y, m - 1, d);
 
       if (option.stages && option.stages.length > 0) {
         option.stages.forEach(stage => {
           for (let i = 0; i < stage.cycles; i++) {
             const isInitial = (i === 0 && events.filter(e => e.type === option.type).length === 0);
-            const eventDate = new Date(currentStartDate);
+            const eventDate = new Date(currentStartDate.getTime());
             eventDate.setDate(currentStartDate.getDate() + (i * frequency));
             
-            const dosageInfo = stage.drugs.map(d => getDoseString(d, isInitial)).join(' + ');
+            const dosageInfo = stage.drugs.map(drug => getDoseString(drug, isInitial)).join(' + ');
 
             events.push({
               title: `${option.name} - ${stage.name} (C${i + 1})`,
               description: `${option.cycle}`,
-              date: eventDate.toISOString().split('T')[0],
+              date: formatDate(eventDate),
               type: option.type as any,
               completed: false,
               dosageDetails: dosageInfo
             });
           }
-          currentStartDate = new Date(currentStartDate);
-          currentStartDate.setDate(currentStartDate.getDate() + (stage.cycles * frequency));
+          const stageTotalDays = stage.cycles * frequency;
+          currentStartDate.setDate(currentStartDate.getDate() + stageTotalDays);
         });
       } else {
         const cycles = option.totalCycles || 1;
         const safeCycles = Math.min(cycles, 1500);
         for (let i = 0; i < safeCycles; i++) {
           const isInitial = (i === 0);
-          const eventDate = new Date(currentStartDate);
+          const eventDate = new Date(currentStartDate.getTime());
           eventDate.setDate(currentStartDate.getDate() + (i * frequency));
           
-          const dosageInfo = option.drugs?.map(d => getDoseString(d, isInitial)).join(' + ');
+          const dosageInfo = option.drugs?.map(drug => getDoseString(drug, isInitial)).join(' + ');
 
           events.push({
             title: frequency === 1 ? `${option.name}` : `${option.name} (第${i + 1}周期)`,
             description: `${option.cycle}`,
-            date: eventDate.toISOString().split('T')[0],
+            date: formatDate(eventDate),
             type: option.type as any,
             completed: false,
             dosageDetails: dosageInfo
@@ -120,6 +150,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
         }
       }
     });
+    
     events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     setGeneratedEvents(events);
     setIsPreviewing(true);
@@ -150,17 +181,18 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
       )}
 
       <div className="space-y-4 mb-5">
-        <div className="text-[9px] text-gray-400 italic">您设定的开始日期将严格同步到日历。</div>
+        <div className="text-[9px] text-gray-400 italic">设定开始日期后，点击“预览”确认排程。</div>
         {typesPresent.map(type => (
             <div key={type} className={`p-2 rounded border ${type === 'chemo' ? 'bg-red-50 border-red-100' : type === 'endocrine' ? 'bg-blue-50 border-blue-100' : 'bg-green-50 border-green-100'}`}>
                 <label className={`block text-[10px] font-bold mb-1 uppercase tracking-wider ${type === 'chemo' ? 'text-red-600' : type === 'endocrine' ? 'text-blue-600' : 'text-green-600'}`}>
                     {type === 'chemo' ? '化疗' : type === 'endocrine' ? '内分泌' : '靶向/免疫'} 开始日期
+                    {type === 'chemo' && <span className="ml-1 text-[8px] font-normal lowercase">(修改此项将默认同步其他日期)</span>}
                 </label>
                 <input 
                   type="date" 
                   className="w-full p-2 text-sm border rounded bg-white outline-none" 
                   value={startDates[type] || ''} 
-                  onChange={e => setStartDates({...startDates, [type]: e.target.value})} 
+                  onChange={e => handleDateChange(type, e.target.value)} 
                 />
             </div>
         ))}
@@ -178,20 +210,23 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
       ) : (
           <div className="space-y-3 animate-fade-in">
               <div className="max-h-48 overflow-y-auto bg-gray-50 p-2.5 rounded-lg text-[10px] space-y-1.5 border border-gray-100">
-                  <div className="text-[9px] text-gray-400 mb-2 italic">※ 系统将生成 {generatedEvents.length} 个时间节点：</div>
-                  {generatedEvents.slice(0, 10).map((e, i) => (
+                  <div className="text-[9px] text-gray-400 mb-2 italic flex justify-between">
+                      <span>※ 系统将生成 {generatedEvents.length} 个时间节点：</span>
+                      <span className="text-blue-600 font-bold">请检查剂量详情是否正确</span>
+                  </div>
+                  {generatedEvents.slice(0, 15).map((e, i) => (
                       <div key={i} className={`bg-white p-2 rounded shadow-xs border-l-2 ${e.type === 'chemo' ? 'border-red-500' : e.type === 'endocrine' ? 'border-blue-500' : 'border-green-500'}`}>
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-gray-400 font-mono">{e.date}</span>
+                            <span className="text-gray-400 font-mono font-bold">{e.date}</span>
                             <span className="font-bold text-gray-700">{e.title}</span>
                           </div>
-                          {e.dosageDetails && <div className="text-[9px] text-medical-600 mt-1 font-mono">{e.dosageDetails}</div>}
+                          {e.dosageDetails && <div className="text-[9px] text-medical-600 mt-1 font-mono bg-medical-50/50 p-1 rounded">剂量: {e.dosageDetails}</div>}
                       </div>
                   ))}
-                  {generatedEvents.length > 10 && <div className="text-center text-[9px] text-gray-400 py-1">... 剩余 {generatedEvents.length - 10} 项已省略预览 ...</div>}
+                  {generatedEvents.length > 15 && <div className="text-center text-[9px] text-gray-400 py-1">... 剩余 {generatedEvents.length - 15} 项已省略预览 ...</div>}
               </div>
               <div className="flex gap-2">
-                  <button onClick={() => setIsPreviewing(false)} className="flex-1 py-2 rounded-lg text-xs font-bold bg-gray-100 text-gray-600">返回修改</button>
+                  <button onClick={() => setIsPreviewing(false)} className="flex-1 py-2 rounded-lg text-xs font-bold bg-gray-100 text-gray-600">返回修改日期</button>
                   <button onClick={handleWriteToTimeline} className={`flex-1 py-2 text-white rounded-lg text-xs font-bold shadow-md active:scale-95 ${isLocked ? 'bg-green-600' : 'bg-medical-600'}`}>确认写入患者日程</button>
               </div>
           </div>
