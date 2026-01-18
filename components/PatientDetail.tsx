@@ -53,44 +53,121 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
       return;
     }
 
-    // 构建 CSV 内容
-    // 添加 BOM 确保 Excel 打开不乱码 (UTF-8)
-    let csvContent = "\ufeff";
-    
-    // 1. 患者概况部分
-    csvContent += `个体化治疗告知单 (患者手册)\n`;
-    csvContent += `姓名,${patient.name},年龄,${patient.age},住院号,${patient.mrn}\n`;
-    csvContent += `临床诊断,${patient.diagnosis},,,\n`;
-    csvContent += `身高(cm),${patient.height || '--'},体重(kg),${patient.weight || '--'},BSA(m2),${patient.height && patient.weight ? (0.0061 * patient.height + 0.0128 * patient.weight - 0.1529).toFixed(2) : '--'}\n`;
-    csvContent += `\n`;
-
-    // 2. 核心病理快照
-    csvContent += `核心临床指标快照\n`;
-    csvContent += `ER,${patient.markers.erStatus},HER2,${patient.markers.her2Status},Ki-67,${patient.markers.ki67}\n`;
-    csvContent += `T分期,${patient.markers.tumorSize},N分期,${patient.markers.nodeStatus},分级,${patient.markers.histologicalGrade}\n`;
-    csvContent += `\n`;
-
-    // 3. 详细排程表
-    csvContent += `详细治疗日程计划\n`;
-    csvContent += `预定日期,项目名称,具体用药/剂量,类型,执行情况(患者填写)\n`;
-
     // 排序日程
     const sortedTimeline = [...patient.timeline].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
+    // 构建 HTML 内容（Excel 可识别带样式的 HTML）
+    const bsa = (patient.height && patient.weight) 
+      ? (0.0061 * patient.height + 0.0128 * patient.weight - 0.1529).toFixed(2) 
+      : '--';
+
+    const getRowStyle = (type: string) => {
+        switch(type) {
+            case 'chemo': return 'background-color: #fee2e2;'; // 浅红
+            case 'endocrine': return 'background-color: #e0f2fe;'; // 浅蓝
+            case 'target': return 'background-color: #f0fdf4;'; // 浅绿
+            case 'surgery': return 'background-color: #f5f3ff;'; // 浅紫
+            default: return '';
+        }
+    };
+
+    let html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
+        <style>
+          .title { font-size: 18pt; font-weight: bold; text-align: center; height: 40pt; vertical-align: middle; }
+          .section-head { background-color: #f3f4f6; font-weight: bold; border: 1pt solid #000; }
+          td { border: 0.5pt solid #ccc; padding: 5pt; font-size: 10pt; }
+          .label { color: #666; font-weight: bold; background-color: #fafafa; }
+          .val { font-weight: normal; }
+          .type-tag { font-size: 8pt; color: #666; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <tr><td colspan="5" class="title">乳腺癌个体化治疗告知单 (患者手册)</td></tr>
+          
+          <!-- 患者基本信息表 -->
+          <tr><td colspan="5" class="section-head">一、患者基本资料</td></tr>
+          <tr>
+            <td class="label">姓名</td><td class="val">${patient.name}</td>
+            <td class="label">年龄</td><td class="val">${patient.age} 岁</td>
+            <td rowspan="3" align="center" valign="middle" style="background-color: #f0f9ff; font-weight: bold;">
+                <br/>体表面积(BSA)<br/><span style="font-size: 14pt; color: #0284c7;">${bsa}</span><br/>m²
+            </td>
+          </tr>
+          <tr>
+            <td class="label">住院号/MRN</td><td class="val">${patient.mrn}</td>
+            <td class="label">入院日期</td><td class="val">${patient.admissionDate}</td>
+          </tr>
+          <tr>
+            <td class="label">临床诊断</td><td colspan="3" class="val">${patient.diagnosis}</td>
+          </tr>
+
+          <!-- 病理快照 -->
+          <tr><td colspan="5" class="section-head">二、核心病理及分子指标快照</td></tr>
+          <tr>
+            <td class="label">ER 状态</td><td class="val">${patient.markers.erStatus}</td>
+            <td class="label">HER2 状态</td><td class="val">${patient.markers.her2Status}</td>
+            <td class="label">分子分型</td>
+          </tr>
+          <tr>
+            <td class="label">Ki-67</td><td class="val">${patient.markers.ki67}</td>
+            <td class="label">淋巴结状态</td><td class="val">${patient.markers.nodeStatus}</td>
+            <td rowspan="2" align="center" valign="middle" style="color: #0d9488; font-weight: bold;">${patient.subtype}</td>
+          </tr>
+          <tr>
+            <td class="label">肿瘤大小</td><td class="val">${patient.markers.tumorSize}</td>
+            <td class="label">组织分级</td><td class="val">${patient.markers.histologicalGrade}</td>
+          </tr>
+
+          <!-- 详细日程 -->
+          <tr><td colspan="5" class="section-head">三、详细治疗排程表 (Roadmap)</td></tr>
+          <tr style="background-color: #4b5563; color: #ffffff; font-weight: bold;">
+            <td width="100">预定日期</td>
+            <td width="200">项目名称</td>
+            <td width="300">具体用药及计算剂量</td>
+            <td width="80">类型</td>
+            <td width="150">备注/体感记录</td>
+          </tr>
+    `;
+
     sortedTimeline.forEach(event => {
       const typeLabel = event.type === 'chemo' ? '化疗' : event.type === 'endocrine' ? '内分泌' : event.type === 'target' ? '靶向' : '其他';
-      const dosage = event.dosageDetails ? event.dosageDetails.replace(/,/g, ' ') : ''; // 移除逗号防止CSV断行
-      csvContent += `${event.date},${event.title},${dosage},${typeLabel},[ ] 已执行\n`;
+      const dosage = event.dosageDetails || '--';
+      
+      html += `
+          <tr style="${getRowStyle(event.type)}">
+            <td align="center"><b>${event.date}</b></td>
+            <td>${event.title}</td>
+            <td style="font-family: 'Courier New', monospace; font-size: 9pt;">${dosage}</td>
+            <td align="center" class="type-tag">${typeLabel}</td>
+            <td style="color: #ccc;">[ ] 已完成 / 记录:</td>
+          </tr>
+      `;
     });
 
-    csvContent += `\n注意：本排程基于指南推荐制定，如遇身体不适（发热、严重腹泻、剧烈呕吐等）请及时联系主管医生调整治疗日期。\n`;
+    html += `
+          <tr><td colspan="5" style="border: none; padding-top: 20pt; color: #666; font-size: 9pt;">
+            <b>注意事项：</b><br/>
+            1. 本计划基于当前临床指南制定，具体执行可能根据血常规及肝肾功能化验结果动态调整。<br/>
+            2. 治疗期间如出现发热（>38.5℃）、严重腹泻、剧烈呕吐或气促，请务必第一时间联系主管医生。<br/>
+            3. 请按时回院，保持心情舒畅，加强营养。<br/>
+            <br/>
+            <b>主管医生签字：____________________</b> &nbsp;&nbsp;&nbsp;&nbsp; <b>日期：${new Date().toLocaleDateString()}</b>
+          </td></tr>
+        </table>
+      </body>
+      </html>
+    `;
 
     // 执行下载
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `${patient.name}_治疗告知单_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `${patient.name}_治疗手册_${new Date().toISOString().split('T')[0]}.xls`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -159,12 +236,12 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
               <div className="flex justify-end">
                 <button 
                   onClick={handleExportToExcel}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-xs font-bold shadow-md active:scale-95 transition-all"
+                  className="flex items-center gap-2 px-4 py-2 bg-green-700 text-white rounded-lg text-xs font-bold shadow-md active:scale-95 transition-all"
                 >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
-                  导出治疗告知书 (Excel)
+                  打印治疗告知书 (XLS)
                 </button>
               </div>
             )}
