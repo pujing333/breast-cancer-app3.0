@@ -22,7 +22,6 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
     }));
     
-    // 关键修复：覆盖模式。先清除原有的自动化治疗事件（chemo, endocrine, target, immune）
     const treatmentTypes = ['chemo', 'endocrine', 'target', 'immune'];
     const filteredTimeline = patient.timeline.filter(e => !treatmentTypes.includes(e.type));
 
@@ -46,6 +45,56 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
       isPlanLocked: isLocked,
       markers: markersToSave || patient.markers
     });
+  };
+
+  const handleExportToExcel = () => {
+    if (patient.timeline.length === 0) {
+      alert("当前没有日程数据可供导出。");
+      return;
+    }
+
+    // 构建 CSV 内容
+    // 添加 BOM 确保 Excel 打开不乱码 (UTF-8)
+    let csvContent = "\ufeff";
+    
+    // 1. 患者概况部分
+    csvContent += `个体化治疗告知单 (患者手册)\n`;
+    csvContent += `姓名,${patient.name},年龄,${patient.age},住院号,${patient.mrn}\n`;
+    csvContent += `临床诊断,${patient.diagnosis},,,\n`;
+    csvContent += `身高(cm),${patient.height || '--'},体重(kg),${patient.weight || '--'},BSA(m2),${patient.height && patient.weight ? (0.0061 * patient.height + 0.0128 * patient.weight - 0.1529).toFixed(2) : '--'}\n`;
+    csvContent += `\n`;
+
+    // 2. 核心病理快照
+    csvContent += `核心临床指标快照\n`;
+    csvContent += `ER,${patient.markers.erStatus},HER2,${patient.markers.her2Status},Ki-67,${patient.markers.ki67}\n`;
+    csvContent += `T分期,${patient.markers.tumorSize},N分期,${patient.markers.nodeStatus},分级,${patient.markers.histologicalGrade}\n`;
+    csvContent += `\n`;
+
+    // 3. 详细排程表
+    csvContent += `详细治疗日程计划\n`;
+    csvContent += `预定日期,项目名称,具体用药/剂量,类型,执行情况(患者填写)\n`;
+
+    // 排序日程
+    const sortedTimeline = [...patient.timeline].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    sortedTimeline.forEach(event => {
+      const typeLabel = event.type === 'chemo' ? '化疗' : event.type === 'endocrine' ? '内分泌' : event.type === 'target' ? '靶向' : '其他';
+      const dosage = event.dosageDetails ? event.dosageDetails.replace(/,/g, ' ') : ''; // 移除逗号防止CSV断行
+      csvContent += `${event.date},${event.title},${dosage},${typeLabel},[ ] 已执行\n`;
+    });
+
+    csvContent += `\n注意：本排程基于指南推荐制定，如遇身体不适（发热、严重腹泻、剧烈呕吐等）请及时联系主管医生调整治疗日期。\n`;
+
+    // 执行下载
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${patient.name}_治疗告知单_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -105,11 +154,26 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
         )}
 
         {activeTab === 'timeline' && (
-          <Timeline 
-            patient={patient}
-            onAddEvent={(e) => onUpdatePatient({...patient, timeline: [...patient.timeline, {...e, id: Date.now().toString()}]})}
-            onUpdateEvent={(e) => onUpdatePatient({...patient, timeline: patient.timeline.map(t => t.id === e.id ? e : t)})}
-          />
+          <div className="space-y-4">
+            {patient.timeline.length > 0 && (
+              <div className="flex justify-end">
+                <button 
+                  onClick={handleExportToExcel}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-xs font-bold shadow-md active:scale-95 transition-all"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                  </svg>
+                  导出治疗告知书 (Excel)
+                </button>
+              </div>
+            )}
+            <Timeline 
+              patient={patient}
+              onAddEvent={(e) => onUpdatePatient({...patient, timeline: [...patient.timeline, {...e, id: Date.now().toString()}]})}
+              onUpdateEvent={(e) => onUpdatePatient({...patient, timeline: patient.timeline.map(t => t.id === e.id ? e : t)})}
+            />
+          </div>
         )}
       </div>
     </div>
