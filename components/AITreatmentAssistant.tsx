@@ -114,14 +114,12 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
       const planToLock: DetailedRegimenPlan = JSON.parse(JSON.stringify(detailedPlan));
       
       const processRegimen = (opt: RegimenOption) => {
-        // 1. 处理普通药物列表
         if (opt.drugs) {
           opt.drugs.forEach(drug => {
             drug.lockedDose = getDoseDisplay(drug, false);
             if (drug.loadingDose) drug.lockedLoadingDose = getDoseDisplay(drug, true);
           });
         }
-        // 2. 递归处理序贯阶段中的药物列表
         if (opt.stages) {
           opt.stages.forEach(stage => {
             stage.drugs.forEach(drug => {
