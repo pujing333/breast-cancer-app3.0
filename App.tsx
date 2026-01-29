@@ -21,9 +21,9 @@ const [patients, setPatients] = useState<Patient[]>(() => {
 const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
 const [isAddingPatient, setIsAddingPatient] = useState(false);
 
-// Persist data
+// 深度持久化
 useEffect(() => {
-localStorage.setItem('patients', JSON.stringify(patients));
+  localStorage.setItem('patients', JSON.stringify(patients));
 }, [patients]);
 
 const activePatient = patients.find(p => p.id === selectedPatientId);
@@ -37,8 +37,12 @@ const handleBack = () => {
 setSelectedPatientId(null);
 };
 
+// 确保引用变化，触发重绘
 const handleUpdatePatient = (updated: Patient) => {
-setPatients(prev => prev.map(p => p.id === updated.id ? updated : p));
+  setPatients(prev => {
+    const newList = prev.map(p => p.id === updated.id ? { ...updated } : p);
+    return [...newList];
+  });
 };
 
 const handleDeletePatient = (id: string) => {
@@ -61,8 +65,6 @@ setPatients([newPatient, ...patients]);
 setIsAddingPatient(false);
 setSelectedPatientId(newId);
 };
-
-// --- Data Backup & Restore Logic ---
 
 const handleExportData = () => {
 try {
@@ -88,7 +90,6 @@ reader.onload = (e) => {
 try {
 const content = e.target?.result as string;
 const importedData = JSON.parse(content);
-// Simple validation
           if (Array.isArray(importedData)) {
               if (window.confirm(`确认导入 ${importedData.length} 条数据？这将覆盖当前的所有数据。`)) {
                   setPatients(importedData);
@@ -106,7 +107,6 @@ const importedData = JSON.parse(content);
 };
 
 return (
-// 使用 h-[100dvh] 代替 min-h-screen，完美适配手机浏览器动态地址栏
 <div className="h-[100dvh] w-screen overflow-hidden bg-gray-50 font-sans text-gray-900 flex flex-col">
 {isAddingPatient ? (
 <AddPatientForm
@@ -115,6 +115,7 @@ onCancel={() => setIsAddingPatient(false)}
 />
 ) : selectedPatientId && activePatient ? (
 <PatientDetail
+key={selectedPatientId} // 增加 Key 强制重新挂载组件，防止状态污染
 patient={activePatient}
 onBack={handleBack}
 onUpdatePatient={handleUpdatePatient}
