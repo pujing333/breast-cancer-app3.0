@@ -28,14 +28,10 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     immune: new Date().toISOString().split('T')[0]
   });
   
-  // 用于追踪哪些日期是被用户手动修改过的，以便进行同步
-  const [manualDates, setManualDates] = useState<Set<string>>(new Set());
-
   const [generatedEvents, setGeneratedEvents] = useState<Omit<TreatmentEvent, 'id'>[]>([]);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // 安全的日期格式化，避免时区导致的“差一天”问题
   const formatDate = (date: Date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -44,7 +40,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
   };
 
   const getDoseString = (drug: DrugDetail, isInitial: boolean) => {
-      if (isInitial && drug.lockedLoadingDose) return `${drug.name}(首剂) ${drug.lockedLoadingDose}`;
+      if (isInitial && drug.lockedLoadingDose) return `${drug.name}(首) ${drug.lockedLoadingDose}`;
       if (!isInitial && drug.lockedDose) return `${drug.name} ${drug.lockedDose}`;
       
       const h = Number(patientHeight) || 0;
@@ -54,99 +50,77 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
       if (h > 0 && w > 0) {
           const bsa = Math.max(0, 0.0061 * h + 0.0128 * w - 0.1529);
           const doseToUse = (isInitial && drug.loadingDose) ? drug.loadingDose : drug.standardDose;
-          const label = (isInitial && drug.loadingDose) ? '(首剂)' : '';
+          const label = (isInitial && drug.loadingDose) ? '(首)' : '';
           const unit = drug.unit.toUpperCase();
           
           let val = 0;
-          if (unit.includes('M2') || unit.includes('M²')) {
-              val = Math.round(doseToUse * bsa);
-          } else if (unit.includes('KG')) {
-              val = Math.round(doseToUse * w);
-          } else if (unit === 'AUC') {
+          if (unit.includes('M2') || unit.includes('M²')) val = Math.round(doseToUse * bsa);
+          else if (unit.includes('KG')) val = Math.round(doseToUse * w);
+          else if (unit === 'AUC') {
               const scrVal = parseFloat(scr || '0');
               if (scrVal > 0) {
                 const gfr = ((140 - age) * w * 1.04) / scrVal;
                 val = Math.round(doseToUse * (gfr + 25));
               }
-          } else if (unit === 'MG') {
-              val = doseToUse;
-          } else if (unit === 'QD' || unit === 'BID') {
-              return `${drug.name} ${drug.standardDose} ${drug.unit}`;
-          }
+          } else if (unit === 'MG') val = doseToUse;
+          else return `${drug.name} ${drug.standardDose} ${drug.unit}`;
 
-          if (val > 0) return `${drug.name}${label} ${val}mg`;
+          return val > 0 ? `${drug.name}${label} ${val}mg` : `${drug.name} ${drug.standardDose}${drug.unit}`;
       }
-      
       return `${drug.name} ${drug.standardDose}${drug.unit}`;
-  };
-
-  const handleDateChange = (type: string, value: string) => {
-    const newDates = { ...startDates, [type]: value };
-    const newManual = new Set(manualDates);
-    newManual.add(type);
-
-    // 如果修改的是“化疗”日期，且其他日期尚未被手动修改，则进行同步
-    if (type === 'chemo') {
-      ['endocrine', 'target', 'immune'].forEach(t => {
-        if (!newManual.has(t)) {
-          newDates[t] = value;
-        }
-      });
-    }
-
-    setStartDates(newDates);
-    setManualDates(newManual);
   };
 
   const handleGenerate = () => {
     const events: Omit<TreatmentEvent, 'id'>[] = [];
+    
     selectedOptions.forEach(option => {
       const frequency = option.frequencyDays || 21;
       const startDateStr = startDates[option.type] || startDates.chemo;
-      
-      // 使用 local time 避免时区偏移
       const [y, m, d] = startDateStr.split('-').map(Number);
-      let currentStartDate = new Date(y, m - 1, d);
+      let currentPointerDate = new Date(y, m - 1, d);
 
+      // 处理分阶段治疗 (Sequential Stages)
       if (option.stages && option.stages.length > 0) {
-        option.stages.forEach(stage => {
+        option.stages.forEach((stage, sIdx) => {
           for (let i = 0; i < stage.cycles; i++) {
-            const isInitial = (i === 0 && events.filter(e => e.type === option.type).length === 0);
-            const eventDate = new Date(currentStartDate.getTime());
-            eventDate.setDate(currentStartDate.getDate() + (i * frequency));
+            // 是否是该方案的绝对第一剂（用于判断首剂加量）
+            const isAbsoluteFirst = (sIdx === 0 && i === 0);
+            const eventDate = new Date(currentPointerDate.getTime());
             
-            const dosageInfo = stage.drugs.map(drug => getDoseString(drug, isInitial)).join(' + ');
+            const dosageInfo = stage.drugs.map(drug => getDoseString(drug, isAbsoluteFirst)).join(' + ');
 
             events.push({
-              title: `${option.name} - ${stage.name} (C${i + 1})`,
-              description: `${option.cycle}`,
+              title: `${stage.name} (C${i + 1})`,
+              description: option.name,
               date: formatDate(eventDate),
               type: option.type as any,
               completed: false,
               dosageDetails: dosageInfo
             });
+
+            // 每个周期结束后日期前进
+            currentPointerDate.setDate(currentPointerDate.getDate() + frequency);
           }
-          const stageTotalDays = stage.cycles * frequency;
-          currentStartDate.setDate(currentStartDate.getDate() + stageTotalDays);
         });
-      } else {
+      } 
+      // 处理常规单阶段循环治疗
+      else {
         const cycles = option.totalCycles || 1;
-        const safeCycles = Math.min(cycles, 1500);
-        for (let i = 0; i < safeCycles; i++) {
+        for (let i = 0; i < cycles; i++) {
           const isInitial = (i === 0);
-          const eventDate = new Date(currentStartDate.getTime());
-          eventDate.setDate(currentStartDate.getDate() + (i * frequency));
+          const eventDate = new Date(currentPointerDate.getTime());
           
           const dosageInfo = option.drugs?.map(drug => getDoseString(drug, isInitial)).join(' + ');
 
           events.push({
-            title: frequency === 1 ? `${option.name}` : `${option.name} (第${i + 1}周期)`,
-            description: `${option.cycle}`,
+            title: frequency === 1 ? `${option.name}` : `${option.name} (C${i + 1})`,
+            description: option.cycle,
             date: formatDate(eventDate),
             type: option.type as any,
             completed: false,
             dosageDetails: dosageInfo
           });
+          currentPointerDate.setDate(currentPointerDate.getDate() + frequency);
         }
       }
     });
@@ -154,7 +128,6 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     setGeneratedEvents(events);
     setIsPreviewing(true);
-    setIsSuccess(false);
   };
 
   const handleWriteToTimeline = () => {
@@ -164,70 +137,38 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
       setTimeout(() => setIsSuccess(false), 3000);
   };
 
-  const typesPresent = Array.from(new Set(selectedOptions.map(o => o.type)));
-
   return (
     <div className={`mt-6 p-4 rounded-xl border transition-all ${isLocked ? 'bg-blue-50/10 border-blue-100' : 'bg-white border-medical-100 shadow-sm'}`}>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-sm font-bold text-gray-700">自动排程生成器</h3>
-        {isLocked && <span className="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">已开启剂量固化同步</span>}
-      </div>
+      <div className="text-sm font-bold text-gray-700 mb-4">自动排程与日期确认</div>
       
-      {isSuccess && (
-          <div className="mb-4 p-2 bg-green-100 text-green-700 text-[10px] font-bold rounded flex items-center animate-bounce">
-              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-              日程同步成功！
-          </div>
-      )}
+      {isSuccess && <div className="mb-4 p-2 bg-green-100 text-green-700 text-[10px] font-bold rounded animate-bounce text-center">日程同步成功！已写入患者日历。</div>}
 
       <div className="space-y-4 mb-5">
-        <div className="text-[9px] text-gray-400 italic">设定开始日期后，点击“预览”确认排程。</div>
-        {typesPresent.map(type => (
-            <div key={type} className={`p-2 rounded border ${type === 'chemo' ? 'bg-red-50 border-red-100' : type === 'endocrine' ? 'bg-blue-50 border-blue-100' : 'bg-green-50 border-green-100'}`}>
-                <label className={`block text-[10px] font-bold mb-1 uppercase tracking-wider ${type === 'chemo' ? 'text-red-600' : type === 'endocrine' ? 'text-blue-600' : 'text-green-600'}`}>
-                    {type === 'chemo' ? '化疗' : type === 'endocrine' ? '内分泌' : '靶向/免疫'} 开始日期
-                    {type === 'chemo' && <span className="ml-1 text-[8px] font-normal lowercase">(修改此项将默认同步其他日期)</span>}
+        {Array.from(new Set(selectedOptions.map(o => o.type))).map(type => (
+            <div key={type} className={`p-2 rounded border ${type === 'chemo' ? 'bg-red-50' : 'bg-blue-50'}`}>
+                <label className="block text-[10px] font-bold mb-1 uppercase text-gray-500">
+                    {type === 'chemo' ? '化疗/新辅助' : type === 'endocrine' ? '内分泌' : '其他'} 起始日期
                 </label>
-                <input 
-                  type="date" 
-                  className="w-full p-2 text-sm border rounded bg-white outline-none" 
-                  value={startDates[type] || ''} 
-                  onChange={e => handleDateChange(type, e.target.value)} 
-                />
+                <input type="date" className="w-full p-2 text-sm border rounded bg-white" value={startDates[type] || ''} onChange={e => setStartDates({...startDates, [type]: e.target.value})} />
             </div>
         ))}
       </div>
 
       {!isPreviewing ? (
-          <button 
-            onClick={handleGenerate} 
-            className={`w-full py-2.5 rounded-lg text-xs font-bold border active:scale-95 transition-transform ${
-              isLocked ? 'bg-blue-600 text-white border-blue-700' : 'bg-medical-50 text-medical-700 border-medical-100'
-            }`}
-          >
-              预览治疗日历
-          </button>
+          <button onClick={handleGenerate} className="w-full py-2.5 bg-medical-50 text-medical-700 border border-medical-100 rounded-lg text-xs font-bold active:scale-95 transition-transform">预览分阶段日程</button>
       ) : (
-          <div className="space-y-3 animate-fade-in">
-              <div className="max-h-48 overflow-y-auto bg-gray-50 p-2.5 rounded-lg text-[10px] space-y-1.5 border border-gray-100">
-                  <div className="text-[9px] text-gray-400 mb-2 italic flex justify-between">
-                      <span>※ 系统将生成 {generatedEvents.length} 个时间节点：</span>
-                      <span className="text-blue-600 font-bold">请检查剂量详情是否正确</span>
-                  </div>
-                  {generatedEvents.slice(0, 15).map((e, i) => (
-                      <div key={i} className={`bg-white p-2 rounded shadow-xs border-l-2 ${e.type === 'chemo' ? 'border-red-500' : e.type === 'endocrine' ? 'border-blue-500' : 'border-green-500'}`}>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-gray-400 font-mono font-bold">{e.date}</span>
-                            <span className="font-bold text-gray-700">{e.title}</span>
-                          </div>
-                          {e.dosageDetails && <div className="text-[9px] text-medical-600 mt-1 font-mono bg-medical-50/50 p-1 rounded">剂量: {e.dosageDetails}</div>}
+          <div className="space-y-3">
+              <div className="max-h-48 overflow-y-auto bg-gray-50 p-2.5 rounded-lg text-[10px] space-y-1.5 border">
+                  {generatedEvents.map((e, i) => (
+                      <div key={i} className="bg-white p-2 rounded shadow-xs border-l-2 border-medical-500 flex justify-between">
+                          <span><b>{e.date}</b> {e.title}</span>
+                          <span className="text-gray-400 font-mono truncate ml-2 max-w-[150px]">{e.dosageDetails}</span>
                       </div>
                   ))}
-                  {generatedEvents.length > 15 && <div className="text-center text-[9px] text-gray-400 py-1">... 剩余 {generatedEvents.length - 15} 项已省略预览 ...</div>}
               </div>
               <div className="flex gap-2">
-                  <button onClick={() => setIsPreviewing(false)} className="flex-1 py-2 rounded-lg text-xs font-bold bg-gray-100 text-gray-600">返回修改日期</button>
-                  <button onClick={handleWriteToTimeline} className={`flex-1 py-2 text-white rounded-lg text-xs font-bold shadow-md active:scale-95 ${isLocked ? 'bg-green-600' : 'bg-medical-600'}`}>确认写入患者日程</button>
+                  <button onClick={() => setIsPreviewing(false)} className="flex-1 py-2 rounded-lg text-xs font-bold bg-gray-100 text-gray-600">返回修改</button>
+                  <button onClick={handleWriteToTimeline} className="flex-1 py-2 bg-medical-600 text-white rounded-lg text-xs font-bold shadow-md">确认写入日程</button>
               </div>
           </div>
       )}
