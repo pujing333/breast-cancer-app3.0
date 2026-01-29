@@ -122,7 +122,11 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           <span className="font-bold text-sm text-gray-800">{opt.name}</span>
           {isSelected && isLocked && <span className="text-[9px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded font-bold">已固化</span>}
         </div>
-        {opt.reasoning && isSelected && <div className="text-[10px] text-medical-700 bg-white/40 p-1 rounded mt-1 border border-medical-100/30">{opt.reasoning}</div>}
+        {opt.reasoning && isSelected && (
+            <div className="text-[10px] text-medical-700 bg-white/40 p-2 rounded mt-1 border border-medical-100/30 italic">
+                {opt.reasoning}
+            </div>
+        )}
         {isSelected && (
           <div className="space-y-1 mt-2">
             {(opt.drugs || opt.stages?.[0]?.drugs)?.map((drug, i) => (
@@ -148,14 +152,14 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     <div className="space-y-6 pb-20">
       <section className={`p-4 rounded-xl border transition-all ${isLocked ? 'bg-gray-50' : 'bg-white shadow-sm border-gray-100'}`}>
         <h3 className="text-sm font-bold text-gray-700 mb-4 flex justify-between items-center">
-            临床决策依据 (TNM/分型)
+            临床依据 (TNM/分型)
             {isLocked && <span className="text-xs text-gray-400 font-normal">状态已锁定</span>}
         </h3>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">ER 状态</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.erStatus} onChange={(e) => handleUpdateMarkerField('erStatus', e.target.value)}><option value="0%">0%</option><option value="1%-10%">1%-10%</option><option value="10%-50%">10%-50%</option><option value=">50%">&gt;50%</option></select></div>
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">HER2 状态</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.her2Status} onChange={(e) => handleUpdateMarkerField('her2Status', e.target.value)}><option value="0">0</option><option value="1+">1+</option><option value="2+">2+</option><option value="3+">3+</option></select></div>
-          <div><label className="text-[10px] text-gray-400 font-bold uppercase">T (肿瘤大小)</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.tumorSize} onChange={(e) => handleUpdateMarkerField('tumorSize', e.target.value)}><option value="T1(≤2cm)">T1 (≤2cm)</option><option value="T2(2-5cm)">T2 (2-5cm)</option><option value="T3(>5cm)">T3 (>5cm)</option><option value="T4(侵及)">T4 (皮肤/胸壁)</option></select></div>
-          <div><label className="text-[10px] text-gray-400 font-bold uppercase">N (淋巴结)</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.nodeStatus} onChange={(e) => handleUpdateMarkerField('nodeStatus', e.target.value)}><option value="N0(阴性)">N0 (阴性)</option><option value="N1(1-3个)">N1 (1-3个)</option><option value="N2(4-9个)">N2 (4-9个)</option><option value="N3(≥10个)">N3 (≥10个)</option></select></div>
+          <div><label className="text-[10px] text-gray-400 font-bold uppercase">cT (分期)</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.tumorSize} onChange={(e) => handleUpdateMarkerField('tumorSize', e.target.value)}><option value="T1(≤2cm)">T1 (≤2cm)</option><option value="T2(2-5cm)">T2 (2-5cm)</option><option value="T3(>5cm)">T3 (>5cm)</option><option value="T4(侵及)">T4 (皮肤/胸壁)</option></select></div>
+          <div><label className="text-[10px] text-gray-400 font-bold uppercase">cN (淋巴结)</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.nodeStatus} onChange={(e) => handleUpdateMarkerField('nodeStatus', e.target.value)}><option value="N0(阴性)">N0 (阴性)</option><option value="N1(1-3个)">N1 (1-3个)</option><option value="N2(4-9个)">N2 (4-9个)</option><option value="N3(≥10个)">N3 (≥10个)</option></select></div>
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">Ki-67 (%)</label><input type="number" disabled={isLocked} className="w-full p-2 text-sm border rounded" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} /></div>
           <div><label className="text-[10px] text-blue-700 font-bold uppercase">血肌酐</label><input type="number" disabled={isLocked} className="w-full p-2 text-sm border border-blue-100 rounded" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} /></div>
         </div>
@@ -169,28 +173,25 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             else subtype = MolecularSubtype.LuminalB;
             const newOptions = generateLocalTreatmentOptions({ ...patient, subtype, markers: localMarkers }, localMarkers);
             onSaveOptions(newOptions, newOptions.find(o => o.recommended)?.id);
-          }} className="w-full mt-4 py-3 bg-medical-600 text-white rounded-lg text-sm font-bold shadow-md active:scale-95 transition-all">1. 专家系统推荐路径</button>
+          }} className="w-full mt-4 py-3 bg-medical-600 text-white rounded-lg text-sm font-bold shadow-md active:scale-95 transition-all">1. 开启智能路径分析</button>
         )}
       </section>
 
       {!isLocked && options.length > 0 && (
         <section className="space-y-3">
-          <div className="text-xs font-bold text-gray-500 px-1 flex items-center gap-1">
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            请选择一条治疗路径以生成具体用药：
-          </div>
+          <div className="text-xs font-bold text-gray-500 px-1">请选择建议路径以细化方案：</div>
           {options.map(o => (
             <div key={o.id} onClick={() => setSelectedPlanId(o.id)} className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${selectedPlanId === o.id ? 'border-medical-600 bg-medical-50 ring-2 ring-medical-100' : 'border-transparent bg-white shadow-sm'}`}>
               <div className="flex justify-between items-start mb-2">
                 <div className="font-bold text-sm text-gray-900">{o.title}</div>
-                {o.recommended && <span className="text-[9px] bg-medical-600 text-white px-2 py-0.5 rounded-full font-bold">指南推荐</span>}
+                {o.recommended && <span className="text-[9px] bg-medical-600 text-white px-2 py-0.5 rounded-full font-bold">优先推荐</span>}
               </div>
-              <div className="text-[11px] text-gray-600 leading-relaxed mb-3">{o.description}</div>
               {o.reasoning && (
-                  <div className="bg-white/60 p-2.5 rounded-lg border border-medical-100 text-[11px] text-medical-800">
-                      <span className="font-bold text-medical-600">推荐依据：</span> {o.reasoning}
+                  <div className="bg-white/60 p-2.5 rounded-lg border border-medical-100 text-[11px] text-medical-800 mb-2">
+                      <span className="font-bold text-medical-600">专家理由：</span> {o.reasoning}
                   </div>
               )}
+              <div className="text-[11px] text-gray-500 leading-relaxed">{o.description}</div>
             </div>
           ))}
           <button onClick={() => {
@@ -199,16 +200,13 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               const plan = generateLocalDetailedRegimens(patient, localMarkers, sel);
               onSaveDetailedPlan(plan, { chemoId: plan.chemoOptions[0]?.id, endocrineId: plan.endocrineOptions[0]?.id, targetId: plan.targetOptions[0]?.id, immuneId: plan.immuneOptions[0]?.id }, false, localMarkers);
             }
-          }} className="w-full py-3 bg-accent-600 text-white rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-all">2. 生成具体用药及分段方案</button>
+          }} className="w-full py-3 bg-accent-600 text-white rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-all">2. 生成具体用药及分段排程</button>
         </section>
       )}
 
       {detailedPlan && (
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-5">
-          <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-            <svg className="w-4 h-4 text-accent-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-            具体用药方案细节
-          </h3>
+          <h3 className="text-sm font-bold text-gray-800">用药方案细节</h3>
           {detailedPlan.chemoOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">化疗/新辅助</div><div className="space-y-2">{detailedPlan.chemoOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="chemoId" />)}</div></div>)}
           {detailedPlan.targetOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">靶向治疗</div><div className="space-y-2">{detailedPlan.targetOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}</div></div>)}
           {detailedPlan.endocrineOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">内分泌及强化</div><div className="space-y-2">{detailedPlan.endocrineOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="endocrineId" />)}</div></div>)}
@@ -217,12 +215,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
               <DosageCalculator options={optionsToCalculate} initialHeight={patient.height} initialWeight={patient.weight} onUpdateStats={(h, w) => onUpdatePatientStats?.(h, w)} patientAge={patient.age} scr={localMarkers.serumCreatinine} isLocked={isLocked} />
               <ScheduleGenerator selectedOptions={optionsToCalculate} onSaveEvents={onBatchAddEvents || (() => {})} patientHeight={patient.height} patientWeight={patient.weight} patientAge={patient.age} scr={localMarkers.serumCreatinine} isLocked={isLocked} />
-              {!isLocked && (
-                <div className="pt-2">
-                    <button onClick={handleConfirmLock} className="w-full py-4 bg-green-600 text-white rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-all">3. 确认方案并锁定剂量</button>
-                    <p className="text-[10px] text-gray-400 mt-2 text-center">锁定后将无法修改指标，确保打印的告知单数据准确唯一</p>
-                </div>
-              )}
+              {!isLocked && <button onClick={handleConfirmLock} className="w-full py-4 bg-green-600 text-white rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-all">3. 锁定方案并固化最终剂量</button>}
             </div>
           )}
         </section>
