@@ -46,6 +46,7 @@ id: string;
 title: string;
 iconType: 'surgery' | 'chemo' | 'drug' | 'observation';
 description: string;
+reasoning?: string; // 推荐理由/指南依据
 duration: string;
 pros: string[];
 cons: string[];
