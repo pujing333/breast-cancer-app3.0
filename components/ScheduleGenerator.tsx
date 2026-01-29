@@ -73,7 +73,29 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
       const [y, m, d] = startDateStr.split('-').map(Number);
       let rollingDate = new Date(y, m - 1, d);
 
-      // 处理序贯分阶段方案 (如 AC-T)
+      // --- OFS 专项处理逻辑 (仅针对内分泌方案中的注射剂) ---
+      if (option.type === 'endocrine') {
+        const ofsDrug = option.drugs?.find(d => d.name.includes('戈舍瑞林') || d.name.includes('瑞林'));
+        if (ofsDrug) {
+           // OFS 仅排注射日，默认每 28 天，排 12 次(1年)或根据总周期
+           const cycles = option.totalCycles || 13; // 1年约13针
+           for (let i = 0; i < cycles; i++) {
+              const currentEventDate = new Date(rollingDate.getTime());
+              events.push({
+                title: `${ofsDrug.name} 注射 (D1)`,
+                description: '卵巢功能抑制 (OFS)',
+                date: formatDate(currentEventDate),
+                type: 'surgery', // 设为 surgery 类型以显示紫色
+                completed: false,
+                dosageDetails: `${ofsDrug.name} ${ofsDrug.standardDose}${ofsDrug.unit}`
+              });
+              rollingDate.setDate(rollingDate.getDate() + 28);
+           }
+           return; // 排完 OFS 针剂后不再排内分泌的其他口服药(AI/TAM)的每日条目
+        }
+      }
+
+      // --- 序贯分阶段方案 (如 AC-T) ---
       if (option.stages && option.stages.length > 0) {
         option.stages.forEach((stage, sIdx) => {
           for (let i = 0; i < stage.cycles; i++) {
@@ -94,7 +116,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
           }
         });
       } 
-      // 处理单阶段循环方案
+      // --- 常规循环方案 ---
       else {
         for (let i = 0; i < (option.totalCycles || 1); i++) {
           const currentEventDate = new Date(rollingDate.getTime());
@@ -118,33 +140,38 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
 
   return (
     <div className={`mt-6 p-4 rounded-xl border ${isLocked ? 'bg-blue-50/10 border-blue-100' : 'bg-white border-medical-100 shadow-sm'}`}>
-      <div className="text-sm font-bold text-gray-700 mb-4">日程排定预览</div>
-      {isSuccess && <div className="mb-4 p-2 bg-green-100 text-green-700 text-[10px] font-bold rounded text-center">✅ 日程已成功同步至患者日历！</div>}
+      <div className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+        <svg className="w-4 h-4 text-medical-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+        日程排定与 OFS 计划
+      </div>
+      {isSuccess && <div className="mb-4 p-2 bg-green-100 text-green-700 text-[10px] font-bold rounded text-center animate-bounce">✅ 日程已成功同步至患者日历！</div>}
       <div className="space-y-4 mb-5">
         {Array.from(new Set(selectedOptions.map(o => o.type))).map(type => (
             <div key={type} className="p-2 rounded border bg-gray-50">
                 <label className="block text-[10px] font-bold mb-1 uppercase text-gray-400">
-                    {type === 'chemo' ? '化疗' : '其他'} 起始日期
+                    {type === 'chemo' ? '化疗' : type === 'endocrine' ? '内分泌/OFS' : '其他'} 起始日期
                 </label>
-                <input type="date" className="w-full p-2 text-sm border rounded bg-white" value={startDates[type] || ''} onChange={e => setStartDates({...startDates, [type]: e.target.value})} />
+                <input type="date" disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white outline-none" value={startDates[type] || ''} onChange={e => setStartDates({...startDates, [type]: e.target.value})} />
             </div>
         ))}
       </div>
       {!isPreviewing ? (
-          <button onClick={handleGenerate} className="w-full py-2.5 bg-medical-50 text-medical-700 border border-medical-100 rounded-lg text-xs font-bold">查看分阶段日程预览</button>
+          <button onClick={handleGenerate} className="w-full py-2.5 bg-medical-50 text-medical-700 border border-medical-100 rounded-lg text-xs font-bold active:scale-[0.98] transition-all">
+            1. 生成分阶段日程预览
+          </button>
       ) : (
           <div className="space-y-3">
-              <div className="max-h-48 overflow-y-auto bg-gray-50 p-2.5 rounded-lg border text-[10px] space-y-1">
+              <div className="max-h-56 overflow-y-auto bg-gray-50 p-2.5 rounded-lg border text-[10px] space-y-1.5 shadow-inner">
                   {generatedEvents.map((e, i) => (
-                      <div key={i} className="bg-white p-2 rounded shadow-xs border-l-2 border-medical-500 flex justify-between">
+                      <div key={i} className={`bg-white p-2 rounded shadow-xs border-l-2 flex justify-between ${e.type === 'surgery' ? 'border-purple-500' : 'border-medical-500'}`}>
                           <span><b>{e.date}</b> {e.title}</span>
-                          <span className="text-gray-400 font-mono truncate ml-2 max-w-[120px]">{e.dosageDetails}</span>
+                          <span className={`${e.type === 'surgery' ? 'text-purple-600 font-bold' : 'text-gray-400'} font-mono truncate ml-2 max-w-[120px]`}>{e.dosageDetails}</span>
                       </div>
                   ))}
               </div>
               <div className="flex gap-2">
                   <button onClick={() => setIsPreviewing(false)} className="flex-1 py-2 rounded-lg text-xs font-bold bg-gray-100 text-gray-600">返回修改</button>
-                  <button onClick={() => { onSaveEvents(generatedEvents); setIsPreviewing(false); setIsSuccess(true); setTimeout(() => setIsSuccess(false), 3000); }} className="flex-1 py-2 bg-medical-600 text-white rounded-lg text-xs font-bold shadow-md">确认并写入日程</button>
+                  <button onClick={() => { onSaveEvents(generatedEvents); setIsPreviewing(false); setIsSuccess(true); setTimeout(() => setIsSuccess(false), 3000); }} className="flex-1 py-2 bg-medical-600 text-white rounded-lg text-xs font-bold shadow-md">2. 确认并写入日程</button>
               </div>
           </div>
       )}
