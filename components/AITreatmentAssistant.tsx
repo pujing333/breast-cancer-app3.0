@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Patient, ClinicalMarkers, TreatmentOption, DetailedRegimenPlan, RegimenOption, SelectedRegimens, TreatmentEvent, DrugDetail, MolecularSubtype } from '../types';
 import { generateLocalTreatmentOptions, generateLocalDetailedRegimens } from '../services/localMedicalRules';
 import { DosageCalculator } from './DosageCalculator';
@@ -30,6 +30,12 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
 
   const isLocked = !!patient.isPlanLocked;
 
+  // 监听外部 patient 变化，同步内部状态
+  useEffect(() => {
+    if (patient.detailedPlan) setDetailedPlan(patient.detailedPlan);
+    if (patient.selectedRegimens) setSelectedRegimens(patient.selectedRegimens);
+  }, [patient.detailedPlan, patient.selectedRegimens]);
+
   const handleUpdateMarkerField = (field: keyof ClinicalMarkers, value: any) => {
     if (isLocked) return;
     const newMarkers = { ...localMarkers, [field]: value };
@@ -37,9 +43,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     onUpdateMarkers(newMarkers);
   };
 
-  // 步骤1: 智能分析方案路径
   const handleGenerateOptions = () => {
-    // 自动判定分子分型（简化逻辑）
     let detectedSubtype = MolecularSubtype.Unknown;
     const erPos = !localMarkers.erStatus.includes('0%');
     const her2Pos = localMarkers.her2Status.includes('3+');
@@ -52,18 +56,50 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
 
     const newOptions = generateLocalTreatmentOptions({ ...patient, subtype: detectedSubtype, markers: localMarkers }, localMarkers);
     setOptions(newOptions);
-    
-    // 默认选择推荐方案
     const recommended = newOptions.find(o => o.recommended);
     if (recommended) setSelectedPlanId(recommended.id);
-    
     onSaveOptions(newOptions, recommended?.id);
   };
 
+  // 获取显示剂量
+  const getDoseDisplay = (drug: DrugDetail, isInitial: boolean = false): string => {
+    if (isInitial && drug.lockedLoadingDose) return drug.lockedLoadingDose;
+    if (!isInitial && drug.lockedDose) return drug.lockedDose;
+
+    const h = patient.height || 0;
+    const w = patient.weight || 0;
+    if (h <= 0 || w <= 0) return "--";
+
+    const bsa = Math.max(0, 0.0061 * h + 0.0128 * w - 0.1529);
+    const doseToUse = (isInitial && drug.loadingDose) ? drug.loadingDose : drug.standardDose;
+    
+    let val = 0;
+    const unit = drug.unit.toUpperCase();
+    
+    if (unit.includes('M2') || unit.includes('M²')) {
+      val = Math.round(doseToUse * bsa);
+    } else if (unit.includes('KG')) {
+      val = Math.round(doseToUse * w);
+    } else if (unit === 'AUC') {
+      const scrVal = parseFloat(localMarkers.serumCreatinine || '0');
+      if (scrVal > 0) {
+        const age = patient.age || 50;
+        const gfr = ((140 - age) * w * 1.04) / scrVal;
+        val = Math.round(doseToUse * (gfr + 25));
+      } else return "需血肌酐";
+    } else {
+      val = doseToUse;
+    }
+    return val > 0 ? `${val} mg` : "--";
+  };
+
   const handleConfirmLock = () => {
-    if (!detailedPlan) return;
+    if (!detailedPlan) {
+        alert("方案数据未生成，请先完成第2步。");
+        return;
+    }
     if (!patient.height || !patient.weight) {
-      alert("请先完善患者身高体重数据。");
+      alert("请先完善患者身高和体重，否则无法计算精确剂量进行锁定。");
       return;
     }
     
@@ -98,40 +134,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
       });
 
       onSaveDetailedPlan(planToLock, selectedRegimens, true, localMarkers);
-      setDetailedPlan(planToLock);
     }
-  };
-
-  const getDoseDisplay = (drug: DrugDetail, isInitial: boolean = false): string => {
-    if (isInitial && drug.lockedLoadingDose) return drug.lockedLoadingDose;
-    if (!isInitial && drug.lockedDose) return drug.lockedDose;
-
-    const h = patient.height || 0;
-    const w = patient.weight || 0;
-    if (h <= 0 || w <= 0) return "--";
-
-    const bsa = Math.max(0, 0.0061 * h + 0.0128 * w - 0.1529);
-    const doseToUse = (isInitial && drug.loadingDose) ? drug.loadingDose : drug.standardDose;
-    
-    let val = 0;
-    const unit = drug.unit.toUpperCase();
-    
-    if (unit.includes('M2') || unit.includes('M²')) {
-      val = Math.round(doseToUse * bsa);
-    } else if (unit.includes('KG')) {
-      val = Math.round(doseToUse * w);
-    } else if (unit === 'AUC') {
-      const scrVal = parseFloat(localMarkers.serumCreatinine || '0');
-      if (scrVal > 0) {
-        const age = patient.age || 50;
-        const gfr = ((140 - age) * w * 1.04) / scrVal;
-        val = Math.round(doseToUse * (gfr + 25));
-      } else return "需血肌酐";
-    } else {
-      val = doseToUse;
-    }
-
-    return val > 0 ? `${val} mg` : "--";
   };
 
   const handleUnlock = () => {
@@ -256,13 +259,14 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               const sel = options.find(o => o.id === selectedPlanId);
               if (sel) {
                 const plan = generateLocalDetailedRegimens(patient, localMarkers, sel);
-                setDetailedPlan(plan);
                 const initial: SelectedRegimens = {};
                 if (plan.chemoOptions.length > 0) initial.chemoId = plan.chemoOptions[0].id;
                 if (plan.endocrineOptions.length > 0) initial.endocrineId = plan.endocrineOptions[0].id;
                 if (plan.targetOptions.length > 0) initial.targetId = plan.targetOptions[0].id;
                 if (plan.immuneOptions.length > 0) initial.immuneId = plan.immuneOptions[0].id;
-                setSelectedRegimens(initial);
+                
+                // 关键点：生成后立即同步到全局，确保持久化
+                onSaveDetailedPlan(plan, initial, false, localMarkers);
               }
             }} className="w-full py-2.5 bg-accent-600 text-white rounded-lg text-xs font-bold shadow-md">2. 生成具体用药</button>
           )}
@@ -280,7 +284,14 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
               <DosageCalculator options={optionsToCalculate} initialHeight={patient.height} initialWeight={patient.weight} onUpdateStats={(h, w) => onUpdatePatientStats?.(h, w)} patientAge={patient.age} scr={localMarkers.serumCreatinine} isLocked={isLocked} />
               <ScheduleGenerator selectedOptions={optionsToCalculate} onSaveEvents={onBatchAddEvents || (() => {})} patientHeight={patient.height} patientWeight={patient.weight} patientAge={patient.age} scr={localMarkers.serumCreatinine} isLocked={isLocked} />
-              {!isLocked && <button onClick={handleConfirmLock} className="w-full py-4 bg-green-600 text-white rounded-xl text-sm font-bold shadow-lg">3. 锁定方案并固化剂量</button>}
+              {!isLocked && (
+                <button 
+                  onClick={handleConfirmLock} 
+                  className="w-full py-4 bg-green-600 text-white rounded-xl text-sm font-bold shadow-lg active:scale-[0.98] transition-all"
+                >
+                  3. 锁定方案并固化剂量
+                </button>
+              )}
             </div>
           )}
         </section>
