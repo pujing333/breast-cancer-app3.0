@@ -25,7 +25,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   const [localMarkers, setLocalMarkers] = useState<ClinicalMarkers>(patient.markers);
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>(patient.selectedPlanId);
   
-  // 关键修复：当父组件更新 selectedPlanId 时，同步本地状态
   useEffect(() => {
     setSelectedPlanId(patient.selectedPlanId);
   }, [patient.selectedPlanId]);
@@ -103,8 +102,8 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     const isSelected = selectedRegimens[typeKey] === opt.id;
     if (isLocked && !isSelected) return null;
 
-    const isAntiHER2 = opt.name.includes('HP') || opt.name.includes('曲妥') || opt.name.includes('帕妥');
-    const isCDK46 = opt.name.includes('阿贝') || opt.name.includes('哌柏');
+    const isAntiHER2 = opt.description?.includes('HER2') || opt.name.includes('曲') || opt.name.includes('帕');
+    const isCDK46 = opt.description?.includes('CDK') || opt.name.includes('阿贝') || opt.name.includes('哌柏');
 
     return (
       <div 
@@ -138,6 +137,9 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     );
   };
 
+  const her2Targets = detailedPlan?.targetOptions.filter(o => o.description?.includes('HER2') || o.name.includes('曲') || o.name.includes('帕')) || [];
+  const cdk46Targets = detailedPlan?.targetOptions.filter(o => o.description?.includes('CDK') || o.name.includes('阿贝') || o.name.includes('哌柏')) || [];
+
   const optionsToCalculate = detailedPlan ? [
     detailedPlan.chemoOptions.find(o => o.id === selectedRegimens.chemoId),
     detailedPlan.endocrineOptions.find(o => o.id === selectedRegimens.endocrineId),
@@ -149,7 +151,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     <div className="space-y-6 pb-20">
       <section className={`p-4 rounded-xl border transition-all ${isLocked ? 'bg-gray-50' : 'bg-white shadow-sm border-gray-100'}`}>
         <h3 className="text-sm font-bold text-gray-700 mb-4 flex justify-between items-center">
-            临床依据 (TNM/分型/绝经)
+            临床依据 (TNM/分型/绝经/肾功)
             {isLocked && <span className="text-xs text-gray-400 font-normal">状态已锁定</span>}
         </h3>
         <div className="grid grid-cols-2 gap-3">
@@ -159,6 +161,10 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">Ki-67 (%)</label><input type="number" disabled={isLocked} className="w-full p-2 text-sm border rounded" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} placeholder="20" /></div>
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">cT (分期)</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.tumorSize} onChange={(e) => handleUpdateMarkerField('tumorSize', e.target.value)}><option value="">待选</option><option value="T1(≤2cm)">T1 (≤2cm)</option><option value="T2(2-5cm)">T2 (2-5cm)</option><option value="T3(>5cm)">T3 (>5cm)</option></select></div>
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">cN (淋巴结)</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.nodeStatus} onChange={(e) => handleUpdateMarkerField('nodeStatus', e.target.value)}><option value="">待选</option><option value="N0(阴性)">N0 (阴性)</option><option value="N1(1-3个)">N1 (1-3个)</option><option value="N2(4-9个)">N2 (4-9个)</option></select></div>
+          <div className="col-span-2">
+            <label className="text-[10px] text-gray-400 font-bold uppercase">血肌酐 Scr (umol/L) - 用于AUC计算</label>
+            <input type="number" disabled={isLocked} className="w-full p-2 text-sm border rounded" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} placeholder="如: 75" />
+          </div>
         </div>
         {!isLocked && (
           <button onClick={() => {
@@ -208,9 +214,13 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
       {detailedPlan && (
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-5 animate-fade-in">
           <h3 className="text-sm font-bold text-gray-800">用药方案细节</h3>
-          {detailedPlan.chemoOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">化疗方案</div><div className="space-y-2">{detailedPlan.chemoOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="chemoId" />)}</div></div>)}
-          {detailedPlan.targetOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">靶向治疗</div><div className="space-y-2">{detailedPlan.targetOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}</div></div>)}
-          {detailedPlan.endocrineOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">内分泌及强化</div><div className="space-y-2">{detailedPlan.endocrineOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="endocrineId" />)}</div></div>)}
+          {detailedPlan.chemoOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">化疗/新辅助</div><div className="space-y-2">{detailedPlan.chemoOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="chemoId" />)}</div></div>)}
+          
+          {her2Targets.length > 0 && (<div><div className="text-[10px] font-bold text-pink-500 mb-2 uppercase">Anti-HER2 靶向治疗</div><div className="space-y-2">{her2Targets.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}</div></div>)}
+          
+          {cdk46Targets.length > 0 && (<div><div className="text-[10px] font-bold text-orange-500 mb-2 uppercase">CDK4/6 抑制剂强化</div><div className="space-y-2">{cdk46Targets.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}</div></div>)}
+          
+          {detailedPlan.endocrineOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">常规内分泌</div><div className="space-y-2">{detailedPlan.endocrineOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="endocrineId" />)}</div></div>)}
           
           {optionsToCalculate.length > 0 && (
             <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
