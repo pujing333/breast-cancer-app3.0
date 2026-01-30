@@ -21,11 +21,11 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
   scr,
   isLocked
 }) => {
-  // 为不同类型的治疗设置独立的起始日期，防止混淆
   const [startDates, setStartDates] = useState<Record<string, string>>({
     chemo: new Date().toISOString().split('T')[0],
     endocrine: new Date().toISOString().split('T')[0],
     target: new Date().toISOString().split('T')[0],
+    cdk46: new Date().toISOString().split('T')[0],
     immune: new Date().toISOString().split('T')[0]
   });
   
@@ -70,36 +70,37 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     
     selectedOptions.forEach(option => {
       const type = option.type;
+      
+      // 识别是否为 CDK4/6i
+      const isCDK46 = option.description?.includes('CDK') || option.name.includes('阿贝') || option.name.includes('哌柏');
+      const dateKey = isCDK46 ? 'cdk46' : type;
+
       const frequency = option.frequencyDays || 21;
-      const startDateStr = startDates[type] || startDates.chemo;
+      const startDateStr = startDates[dateKey] || startDates.chemo;
       const [y, m, d] = startDateStr.split('-').map(Number);
       let rollingDate = new Date(y, m - 1, d);
 
-      // --- OFS 专项识别与处理 ---
       const hasOFS = option.drugs?.some(d => d.name.includes('戈舍瑞林') || d.name.includes('瑞林'));
       
       if (hasOFS && type === 'endocrine') {
-        // OFS 仅排 28 天/次的注射日期，不排口服药的每一天
         const ofsDrug = option.drugs?.find(d => d.name.includes('戈舍瑞林') || d.name.includes('瑞林'));
-        const cycles = option.totalCycles || 13; // 1年约13针
+        const cycles = option.totalCycles || 13;
         for (let i = 0; i < cycles; i++) {
            const currentEventDate = new Date(rollingDate.getTime());
            events.push({
              title: `${ofsDrug?.name} 注射 (D1)`,
              description: '卵巢功能抑制 (OFS)',
              date: formatDate(currentEventDate),
-             type: 'surgery', // 设为 surgery 以对应紫色
+             type: 'surgery', 
              completed: false,
              dosageDetails: `${ofsDrug?.name} ${ofsDrug?.standardDose}${ofsDrug?.unit}`
            });
            rollingDate.setDate(rollingDate.getDate() + 28);
         }
-        return; // 处理完 OFS 直接跳过，不按常规周期循环
+        return;
       }
 
-      // --- 常规方案与序贯方案处理 ---
       if (option.stages && option.stages.length > 0) {
-        // 序贯方案：如 AC -> T
         option.stages.forEach((stage, sIdx) => {
           for (let i = 0; i < stage.cycles; i++) {
             const isFirstOfAll = (sIdx === 0 && i === 0);
@@ -116,18 +117,33 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
           }
         });
       } else {
-        // 普通循环方案
-        for (let i = 0; i < (option.totalCycles || 1); i++) {
+        const cyclesToGenerate = isCDK46 ? (option.totalCycles || 24) : (option.totalCycles || 1);
+        for (let i = 0; i < cyclesToGenerate; i++) {
           const currentEventDate = new Date(rollingDate.getTime());
-          events.push({
-            title: frequency === 1 ? `${option.name}` : `${option.name} (C${i + 1})`,
-            description: option.cycle,
-            date: formatDate(currentEventDate),
-            type: type as any,
-            completed: false,
-            dosageDetails: option.drugs?.map(drug => getDoseString(drug, i === 0)).join(' + ')
-          });
-          rollingDate.setDate(rollingDate.getDate() + frequency);
+          
+          // 如果是 CDK4/6i 等每日服用的药物，排程中仅标注起始和关键周期节点，或每月提醒
+          if (isCDK46 && frequency === 1) {
+            if (i % 28 === 0) { // 每28天一个周期节点
+                events.push({
+                    title: `${option.name} (开始第 ${Math.floor(i/28) + 1} 周期)`,
+                    description: '每日口服两次',
+                    date: formatDate(currentEventDate),
+                    type: 'target',
+                    completed: false,
+                    dosageDetails: option.drugs?.map(drug => getDoseString(drug, i === 0)).join(' + ')
+                });
+            }
+          } else {
+            events.push({
+                title: frequency === 1 ? `${option.name}` : `${option.name} (C${i + 1})`,
+                description: option.cycle,
+                date: formatDate(currentEventDate),
+                type: type as any,
+                completed: false,
+                dosageDetails: option.drugs?.map(drug => getDoseString(drug, i === 0)).join(' + ')
+            });
+          }
+          rollingDate.setDate(rollingDate.getDate() + (isCDK46 && frequency === 1 ? 1 : frequency));
         }
       }
     });
@@ -137,40 +153,48 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     setIsPreviewing(true);
   };
 
+  const activeTypes = Array.from(new Set(selectedOptions.map(o => {
+    if (o.description?.includes('CDK') || o.name.includes('阿贝') || o.name.includes('哌柏')) return 'cdk46';
+    return o.type;
+  })));
+
   return (
     <div className={`mt-6 p-4 rounded-xl border ${isLocked ? 'bg-blue-50/10 border-blue-100' : 'bg-white border-medical-100 shadow-sm'}`}>
       <div className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
         <svg className="w-4 h-4 text-medical-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-        分项起始日期设置 (防止计划冲突)
+        分项起始日期设置
       </div>
       
       <div className="space-y-4 mb-5">
-        {Array.from(new Set(selectedOptions.map(o => o.type))).map(type => (
-            <div key={type} className="p-2.5 rounded-lg border bg-gray-50 flex items-center justify-between gap-4">
-                <label className="text-[10px] font-bold uppercase text-gray-500 min-w-[70px]">
-                    {type === 'chemo' ? '化疗' : type === 'endocrine' ? '内分泌/OFS' : type === 'target' ? '靶向治疗' : '免疫治疗'}
+        {activeTypes.map(type => (
+            <div key={type} className={`p-2.5 rounded-lg border flex items-center justify-between gap-4 ${type === 'cdk46' ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-200'}`}>
+                <label className={`text-[10px] font-bold uppercase min-w-[80px] ${type === 'cdk46' ? 'text-orange-600' : 'text-gray-500'}`}>
+                    {type === 'chemo' ? '化疗' : 
+                     type === 'endocrine' ? '内分泌/OFS' : 
+                     type === 'target' ? 'Anti-HER2靶向' : 
+                     type === 'cdk46' ? 'CDK4/6i强化' : '其他治疗'}
                 </label>
                 <input type="date" disabled={isLocked} className="flex-1 p-1.5 text-xs border rounded bg-white outline-none focus:ring-1 focus:ring-medical-500" value={startDates[type] || ''} onChange={e => setStartDates({...startDates, [type]: e.target.value})} />
             </div>
         ))}
       </div>
 
-      {isSuccess && <div className="mb-4 p-2 bg-green-100 text-green-700 text-[10px] font-bold rounded text-center animate-bounce">✅ 治疗日程已成功生成并同步！</div>}
+      {isSuccess && <div className="mb-4 p-2 bg-green-100 text-green-700 text-[10px] font-bold rounded text-center animate-bounce">✅ 治疗日程已成功生成！</div>}
 
       {!isPreviewing ? (
           <button onClick={handleGenerate} className="w-full py-3 bg-medical-50 text-medical-700 border border-medical-100 rounded-lg text-xs font-bold active:scale-[0.98] transition-all">
-            1. 自动计算并预览日程点
+            1. 自动计算并预览排程节点
           </button>
       ) : (
           <div className="space-y-3">
               <div className="max-h-56 overflow-y-auto bg-gray-50 p-3 rounded-lg border text-[10px] space-y-1.5 shadow-inner">
                   {generatedEvents.map((e, i) => (
-                      <div key={i} className={`bg-white p-2.5 rounded shadow-xs border-l-4 flex justify-between items-center ${e.type === 'surgery' ? 'border-purple-500' : 'border-medical-500'}`}>
+                      <div key={i} className={`bg-white p-2.5 rounded shadow-xs border-l-4 flex justify-between items-center ${e.title.includes('阿贝') || e.title.includes('CDK') ? 'border-orange-500' : e.type === 'surgery' ? 'border-purple-500' : 'border-medical-500'}`}>
                           <div className="flex flex-col">
                               <span className="font-bold">{e.date}</span>
                               <span className="text-gray-600">{e.title}</span>
                           </div>
-                          <span className={`font-mono text-[9px] truncate ml-4 max-w-[150px] ${e.type === 'surgery' ? 'text-purple-600 font-bold' : 'text-gray-400'}`}>
+                          <span className={`font-mono text-[9px] truncate ml-4 max-w-[150px] ${e.title.includes('阿贝') ? 'text-orange-600' : 'text-gray-400'}`}>
                               {e.dosageDetails}
                           </span>
                       </div>
