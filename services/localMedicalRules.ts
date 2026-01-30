@@ -55,7 +55,6 @@ export const generateLocalTreatmentOptions = (patient: Patient, markers: Clinica
   const isHRPositive = erVal > 0;
 
   // 1. 核心判断：新辅助治疗的适用性 (基于 CSCO 指南)
-  // 指南：HER2+ 或 TNBC 且 (T>=2 或 N+) 推荐新辅助
   const stronglyRecommendNeoadjuvant = (isHER2 || isTNBC) && (tSize >= 2.0 || nStage >= 1);
   const luminalNeoadjuvant = isHRPositive && !isHER2 && (nStage >= 2 || (nStage >= 1 && grade === 3));
 
@@ -116,11 +115,13 @@ export const generateLocalDetailedRegimens = (
   const subtype = patient.subtype;
   const isHER2 = subtype === MolecularSubtype.HER2Positive || (markers.her2Status && markers.her2Status.includes('3+'));
   const isTNBC = subtype === MolecularSubtype.TripleNegative;
-  const isHRPositive = !markers.erStatus.includes('0%');
+  const erVal = getPercentage(markers.erStatus);
+  const isHRPositive = erVal > 0;
   const nStage = getNodeStage(markers.nodeStatus);
   const isMeno = markers.menopause;
+  const ki67Val = getKi67(markers.ki67);
 
-  // 1. 化疗细化 (区分序贯与常规)
+  // 1. 化疗细化
   if (highLevelPlan.id !== 'path_conservative') {
     if (isHER2) {
       plan.chemoOptions.push({
@@ -170,7 +171,7 @@ export const generateLocalDetailedRegimens = (
     }
   }
 
-  // 2. 靶向方案
+  // 2. 靶向方案 (包含 HER2 靶向及 CDK4/6 抑制剂)
   if (isHER2) {
     plan.targetOptions.push({
         id: 't_hp',
@@ -186,7 +187,23 @@ export const generateLocalDetailedRegimens = (
     });
   }
 
-  // 3. 内分泌方案 (OFS 特别处理)
+  // CDK4/6 抑制剂加入靶向治疗选项 (针对 HR+ HER2- 高危辅助)
+  if (isHRPositive && !isHER2 && nStage >= 1) {
+    plan.targetOptions.push({
+      id: 't_abe',
+      name: '阿贝西利 (Abemaciclib)',
+      description: 'CDK4/6 抑制剂联合内分泌',
+      cycle: '每日两次, 连续服用 2 年',
+      type: 'target',
+      recommended: true,
+      totalCycles: 730,
+      frequencyDays: 1,
+      reasoning: '基于 monarchE 研究：针对 HR+/HER2-、淋巴结阳性的高危早期乳腺癌，阿贝西利联合内分泌治疗显著提高 iDFS。',
+      drugs: [{ name: '阿贝西利', standardDose: 150, unit: 'mg' }]
+    });
+  }
+
+  // 3. 内分泌方案
   if (isHRPositive) {
     const needOFS = !isMeno && (nStage >= 1 || patient.age < 35);
     if (needOFS) {
@@ -197,7 +214,7 @@ export const generateLocalDetailedRegimens = (
             cycle: '28天/针 + 每日口服',
             type: 'endocrine',
             recommended: true,
-            totalCycles: 13, // 1年13针
+            totalCycles: 13,
             frequencyDays: 28,
             reasoning: 'SOFT/TEXT研究证明：对于高危绝经前患者，OFS+AI优于单纯他莫昔芬。',
             drugs: [
@@ -217,6 +234,25 @@ export const generateLocalDetailedRegimens = (
             frequencyDays: 1,
             reasoning: '早期绝经后或极低危患者的标准辅助方案。',
             drugs: [{ name: '他莫昔芬', standardDose: 20, unit: 'mg' }]
+        });
+    }
+
+    // 哌柏西利 (Palbociclib) 通常用于晚期或特定临床研究，此处作为内分泌联合选项展示
+    if (patient.diagnosis.includes('晚期') || patient.diagnosis.includes('转移')) {
+        plan.endocrineOptions.push({
+            id: 'e_pal',
+            name: '哌柏西利 (Palbociclib) + AI',
+            description: 'CDK4/6 抑制剂联合 AI',
+            cycle: '125mg qd (服21天停7天)',
+            type: 'endocrine',
+            recommended: true,
+            totalCycles: 12, // 示例展示1年周期
+            frequencyDays: 28,
+            reasoning: 'PALOMA系列研究证明：CDK4/6 抑制剂联合内分泌治疗是 HR+/HER2- 晚期乳腺癌的标准一线方案。',
+            drugs: [
+                { name: '哌柏西利', standardDose: 125, unit: 'mg' },
+                { name: '来曲唑', standardDose: 2.5, unit: 'mg' }
+            ]
         });
     }
   }
