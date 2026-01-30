@@ -121,12 +121,15 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           </div>
           {isSelected && isLocked && <span className="text-[9px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded font-bold">已固化</span>}
         </div>
+        
+        <div className="text-[10px] text-gray-500 italic mt-0.5 mb-2">{opt.description}</div>
+
         {isSelected && (
-          <div className="space-y-1 mt-2">
+          <div className="space-y-1 mt-1">
             {(opt.drugs || opt.stages?.[0]?.drugs)?.map((drug, i) => (
               <div key={i} className="flex flex-col gap-1 bg-white/60 p-1.5 rounded border border-white">
                 <div className="flex justify-between text-[11px]">
-                    <span className="text-gray-600">{drug.name}</span>
+                    <span className="text-gray-600">{drug.name} (用法: {opt.cycle})</span>
                     <span className={`font-bold ${isLocked ? 'text-green-600' : 'text-medical-600'}`}>{getDoseDisplay(drug, false)}</span>
                 </div>
               </div>
