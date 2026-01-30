@@ -152,18 +152,19 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     <div className="space-y-6 pb-20">
       <section className={`p-4 rounded-xl border transition-all ${isLocked ? 'bg-gray-50' : 'bg-white shadow-sm border-gray-100'}`}>
         <h3 className="text-sm font-bold text-gray-700 mb-4 flex justify-between items-center">
-            临床依据 (TNM/分型)
+            临床依据 (TNM/分型/绝经)
             {isLocked && <span className="text-xs text-gray-400 font-normal">状态已锁定</span>}
         </h3>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">ER 状态</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.erStatus} onChange={(e) => handleUpdateMarkerField('erStatus', e.target.value)}><option value="0%">0%</option><option value="1%-10%">1%-10%</option><option value="10%-50%">10%-50%</option><option value=">50%">&gt;50%</option></select></div>
+          <div><label className="text-[10px] text-gray-400 font-bold uppercase">绝经状态</label><select disabled={isLocked} className="w-full p-2 text-sm border border-medical-200 rounded bg-medical-50/30" value={localMarkers.menopause ? 'yes' : 'no'} onChange={(e) => handleUpdateMarkerField('menopause', e.target.value === 'yes')}><option value="no">绝经前</option><option value="yes">绝经后</option></select></div>
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">HER2 状态</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.her2Status} onChange={(e) => handleUpdateMarkerField('her2Status', e.target.value)}><option value="0">0</option><option value="1+">1+</option><option value="2+">2+</option><option value="3+">3+</option></select></div>
+          <div><label className="text-[10px] text-gray-400 font-bold uppercase">Ki-67 (%)</label><input type="number" disabled={isLocked} className="w-full p-2 text-sm border rounded" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} /></div>
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">cT (分期)</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.tumorSize} onChange={(e) => handleUpdateMarkerField('tumorSize', e.target.value)}><option value="T1(≤2cm)">T1 (≤2cm)</option><option value="T2(2-5cm)">T2 (2-5cm)</option><option value="T3(>5cm)">T3 (>5cm)</option><option value="T4(侵及)">T4 (皮肤/胸壁)</option></select></div>
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">cN (淋巴结)</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.nodeStatus} onChange={(e) => handleUpdateMarkerField('nodeStatus', e.target.value)}><option value="N0(阴性)">N0 (阴性)</option><option value="N1(1-3个)">N1 (1-3个)</option><option value="N2(4-9个)">N2 (4-9个)</option><option value="N3(≥10个)">N3 (≥10个)</option></select></div>
-          <div><label className="text-[10px] text-gray-400 font-bold uppercase">Ki-67 (%)</label><input type="number" disabled={isLocked} className="w-full p-2 text-sm border rounded" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} /></div>
-          <div><label className="text-[10px] text-blue-700 font-bold uppercase">血肌酐</label><input type="number" disabled={isLocked} className="w-full p-2 text-sm border border-blue-100 rounded" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} /></div>
+          <div className="col-span-2"><label className="text-[10px] text-blue-700 font-bold uppercase">血肌酐 (umol/L)</label><input type="number" disabled={isLocked} className="w-full p-2 text-sm border border-blue-100 rounded" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} /></div>
         </div>
-        {!isLocked && options.length === 0 && (
+        {!isLocked && (
           <button onClick={() => {
             let subtype = MolecularSubtype.Unknown;
             const erPos = !localMarkers.erStatus.includes('0%');
