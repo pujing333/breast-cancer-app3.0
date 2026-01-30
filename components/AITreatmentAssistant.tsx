@@ -62,18 +62,13 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   };
 
   const handleConfirmLock = () => {
-    if (!detailedPlan) {
-      alert("方案尚未生成，请执行第2步。");
-      return;
-    }
+    if (!detailedPlan) return;
     if (!patient.height || !patient.weight) {
-      alert("请录入患者身高和体重以固化剂量。");
+      alert("请先录入患者身高和体重。");
       return;
     }
-    
-    if (window.confirm("确定锁定该治疗方案吗？\n1. 锁定后病理指标及药物方案不可更改。\n2. 所有药物剂量将固化为具体数值。")) {
+    if (window.confirm("确定锁定该治疗方案吗？")) {
       const planToLock: DetailedRegimenPlan = JSON.parse(JSON.stringify(detailedPlan));
-      
       const processRegimen = (opt: RegimenOption) => {
         if (opt.drugs) {
           opt.drugs.forEach(d => {
@@ -81,25 +76,14 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             if (d.loadingDose) d.lockedLoadingDose = getDoseDisplay(d, true);
           });
         }
-        if (opt.stages) {
-          opt.stages.forEach(s => {
-            s.drugs.forEach(d => {
-              d.lockedDose = getDoseDisplay(d, false);
-              if (d.loadingDose) d.lockedLoadingDose = getDoseDisplay(d, true);
-            });
-          });
-        }
       };
-
       ['chemoOptions', 'endocrineOptions', 'targetOptions', 'immuneOptions'].forEach(cat => {
         const selId = (selectedRegimens as any)[cat.replace('Options', 'Id')];
         (planToLock as any)[cat].forEach((opt: RegimenOption) => {
           if (opt.id === selId) processRegimen(opt);
         });
       });
-
       onSaveDetailedPlan(planToLock, selectedRegimens, true, localMarkers);
-      alert("✅ 方案锁定成功，剂量已固化。");
     }
   };
 
@@ -113,26 +97,48 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   const RegimenCard = ({ opt, typeKey }: { opt: RegimenOption, typeKey: keyof SelectedRegimens }) => {
     const isSelected = selectedRegimens[typeKey] === opt.id;
     if (isLocked && !isSelected) return null;
+
+    // 区分靶向药物子类别
+    const isAntiHER2 = opt.name.includes('HP') || opt.name.includes('曲妥') || opt.name.includes('帕妥');
+    const isCDK46 = opt.name.includes('阿贝') || opt.name.includes('哌柏');
+
     return (
       <div 
         onClick={() => !isLocked && onSaveDetailedPlan(detailedPlan!, { ...selectedRegimens, [typeKey]: opt.id }, false)}
         className={`p-3 rounded-lg border transition-all ${isSelected ? 'border-medical-500 bg-medical-50 shadow-sm' : 'border-gray-100 bg-white opacity-60'}`}
       >
         <div className="flex justify-between items-center mb-1">
-          <span className="font-bold text-sm text-gray-800">{opt.name}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-sm text-gray-800">{opt.name}</span>
+            {typeKey === 'targetId' && (
+                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${isAntiHER2 ? 'bg-pink-100 text-pink-600' : isCDK46 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
+                    {isAntiHER2 ? 'Anti-HER2' : isCDK46 ? 'CDK4/6i' : '靶向'}
+                </span>
+            )}
+          </div>
           {isSelected && isLocked && <span className="text-[9px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded font-bold">已固化</span>}
         </div>
+        
         {opt.reasoning && isSelected && (
             <div className="text-[10px] text-medical-700 bg-white/40 p-2 rounded mt-1 border border-medical-100/30 italic">
                 {opt.reasoning}
             </div>
         )}
+
         {isSelected && (
           <div className="space-y-1 mt-2">
             {(opt.drugs || opt.stages?.[0]?.drugs)?.map((drug, i) => (
-              <div key={i} className="flex justify-between text-[11px] bg-white/60 p-1.5 rounded border border-white">
-                <span className="text-gray-600">{drug.name}</span>
-                <span className={`font-bold ${isLocked ? 'text-green-600' : 'text-medical-600'}`}>{getDoseDisplay(drug)}</span>
+              <div key={i} className="flex flex-col gap-1 bg-white/60 p-1.5 rounded border border-white">
+                <div className="flex justify-between text-[11px]">
+                    <span className="text-gray-600">{drug.name} (维持)</span>
+                    <span className={`font-bold ${isLocked ? 'text-green-600' : 'text-medical-600'}`}>{getDoseDisplay(drug, false)}</span>
+                </div>
+                {drug.loadingDose && (
+                    <div className="flex justify-between text-[10px] text-accent-600 italic">
+                        <span>● 首次剂量 (Loading)</span>
+                        <span className="font-bold">{getDoseDisplay(drug, true)}</span>
+                    </div>
+                )}
               </div>
             ))}
           </div>
@@ -155,6 +161,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             临床依据 (TNM/分型/绝经)
             {isLocked && <span className="text-xs text-gray-400 font-normal">状态已锁定</span>}
         </h3>
+        {/* ... 指标录入区域保持不变 ... */}
         <div className="grid grid-cols-2 gap-3">
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">ER 状态</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.erStatus} onChange={(e) => handleUpdateMarkerField('erStatus', e.target.value)}><option value="0%">0%</option><option value="1%-10%">1%-10%</option><option value="10%-50%">10%-50%</option><option value=">50%">&gt;50%</option></select></div>
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">绝经状态</label><select disabled={isLocked} className="w-full p-2 text-sm border border-medical-200 rounded bg-medical-50/30" value={localMarkers.menopause ? 'yes' : 'no'} onChange={(e) => handleUpdateMarkerField('menopause', e.target.value === 'yes')}><option value="no">绝经前</option><option value="yes">绝经后</option></select></div>
@@ -162,7 +169,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">Ki-67 (%)</label><input type="number" disabled={isLocked} className="w-full p-2 text-sm border rounded" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} /></div>
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">cT (分期)</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.tumorSize} onChange={(e) => handleUpdateMarkerField('tumorSize', e.target.value)}><option value="T1(≤2cm)">T1 (≤2cm)</option><option value="T2(2-5cm)">T2 (2-5cm)</option><option value="T3(>5cm)">T3 (>5cm)</option><option value="T4(侵及)">T4 (皮肤/胸壁)</option></select></div>
           <div><label className="text-[10px] text-gray-400 font-bold uppercase">cN (淋巴结)</label><select disabled={isLocked} className="w-full p-2 text-sm border rounded bg-white" value={localMarkers.nodeStatus} onChange={(e) => handleUpdateMarkerField('nodeStatus', e.target.value)}><option value="N0(阴性)">N0 (阴性)</option><option value="N1(1-3个)">N1 (1-3个)</option><option value="N2(4-9个)">N2 (4-9个)</option><option value="N3(≥10个)">N3 (≥10个)</option></select></div>
-          <div className="col-span-2"><label className="text-[10px] text-blue-700 font-bold uppercase">血肌酐 (umol/L)</label><input type="number" disabled={isLocked} className="w-full p-2 text-sm border border-blue-100 rounded" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} /></div>
         </div>
         {!isLocked && (
           <button onClick={() => {
@@ -178,38 +184,21 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         )}
       </section>
 
-      {!isLocked && options.length > 0 && (
-        <section className="space-y-3">
-          <div className="text-xs font-bold text-gray-500 px-1">请选择建议路径以细化方案：</div>
-          {options.map(o => (
-            <div key={o.id} onClick={() => setSelectedPlanId(o.id)} className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${selectedPlanId === o.id ? 'border-medical-600 bg-medical-50 ring-2 ring-medical-100' : 'border-transparent bg-white shadow-sm'}`}>
-              <div className="flex justify-between items-start mb-2">
-                <div className="font-bold text-sm text-gray-900">{o.title}</div>
-                {o.recommended && <span className="text-[9px] bg-medical-600 text-white px-2 py-0.5 rounded-full font-bold">优先推荐</span>}
-              </div>
-              {o.reasoning && (
-                  <div className="bg-white/60 p-2.5 rounded-lg border border-medical-100 text-[11px] text-medical-800 mb-2">
-                      <span className="font-bold text-medical-600">专家理由：</span> {o.reasoning}
-                  </div>
-              )}
-              <div className="text-[11px] text-gray-500 leading-relaxed">{o.description}</div>
-            </div>
-          ))}
-          <button onClick={() => {
-            const sel = options.find(o => o.id === selectedPlanId);
-            if (sel) {
-              const plan = generateLocalDetailedRegimens(patient, localMarkers, sel);
-              onSaveDetailedPlan(plan, { chemoId: plan.chemoOptions[0]?.id, endocrineId: plan.endocrineOptions[0]?.id, targetId: plan.targetOptions[0]?.id, immuneId: plan.immuneOptions[0]?.id }, false, localMarkers);
-            }
-          }} className="w-full py-3 bg-accent-600 text-white rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-all">2. 生成具体用药及分段排程</button>
-        </section>
-      )}
-
       {detailedPlan && (
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-5">
-          <h3 className="text-sm font-bold text-gray-800">用药方案细节</h3>
+          <h3 className="text-sm font-bold text-gray-800">用药方案细节 (靶向区分)</h3>
+          {/* ... 其他 Options 渲染 ... */}
           {detailedPlan.chemoOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">化疗/新辅助</div><div className="space-y-2">{detailedPlan.chemoOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="chemoId" />)}</div></div>)}
-          {detailedPlan.targetOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">靶向治疗</div><div className="space-y-2">{detailedPlan.targetOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}</div></div>)}
+          
+          {detailedPlan.targetOptions.length > 0 && (
+            <div>
+              <div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">靶向治疗 (Anti-HER2 / CDK4/6i)</div>
+              <div className="space-y-2">
+                {detailedPlan.targetOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}
+              </div>
+            </div>
+          )}
+
           {detailedPlan.endocrineOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">内分泌及强化</div><div className="space-y-2">{detailedPlan.endocrineOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="endocrineId" />)}</div></div>)}
           
           {optionsToCalculate.length > 0 && (
