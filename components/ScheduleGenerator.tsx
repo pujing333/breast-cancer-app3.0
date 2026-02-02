@@ -70,7 +70,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     
     selectedOptions.forEach(option => {
       const type = option.type;
-      const dateKey = type; // 统一使用 option.type 作为键
+      const dateKey = type; 
 
       const frequency = option.frequencyDays || 21;
       const startDateStr = startDates[dateKey] || startDates.chemo;
@@ -80,43 +80,82 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
 
       let rollingDate = new Date(y, m - 1, d);
 
-      const hasOFS = option.drugs?.some(d => d.name.includes('戈舍瑞林') || d.name.includes('瑞林'));
-      
-      // 1. 特殊逻辑：OFS + AI (Endocrine)
-      if (hasOFS && type === 'endocrine') {
-        const ofsDrug = option.drugs?.find(d => d.name.includes('戈舍瑞林') || d.name.includes('瑞林'));
-        const aiDrug = option.drugs?.find(d => !(d.name.includes('戈舍瑞林') || d.name.includes('瑞林')));
+      // 特殊逻辑：内分泌（OFS + AI）
+      if (type === 'endocrine') {
+        const ofsDrug = option.drugs?.find(d => d.name.includes('戈舍瑞林') || d.name.includes('亮丙瑞林'));
+        const oralDrug = option.drugs?.find(d => !d.name.includes('戈舍瑞林') && !d.name.includes('亮丙瑞林'));
         
-        // 生成 OFS 针剂节点
-        const cycles = option.totalCycles || 13;
-        for (let i = 0; i < cycles; i++) {
-           const currentEventDate = new Date(rollingDate.getTime());
-           events.push({
-             title: `${ofsDrug?.name} 注射 (D1)`,
-             description: '卵巢功能抑制 (OFS)',
-             date: formatDate(currentEventDate),
-             type: 'endocrine', 
-             completed: false,
-             dosageDetails: `${ofsDrug?.name} ${ofsDrug?.standardDose}${ofsDrug?.unit}`
-           });
-           rollingDate.setDate(rollingDate.getDate() + 28);
+        // 1. 生成 OFS 针剂节点 (根据 frequency 判断 28天 或 84天)
+        if (ofsDrug) {
+            const cycles = ofsDrug.name.includes('3月') || frequency > 30 ? 4 : 13; // 3月剂型生成一年量约为4-5次
+            let ofsDate = new Date(rollingDate.getTime());
+            for (let i = 0; i < (option.totalCycles || cycles); i++) {
+                events.push({
+                    title: `${ofsDrug.name} 注射`,
+                    description: `OFS 卵巢功能抑制 (${frequency}天/针)`,
+                    date: formatDate(ofsDate),
+                    type: 'endocrine',
+                    completed: false,
+                    dosageDetails: `${ofsDrug.name} ${ofsDrug.standardDose}${ofsDrug.unit}`
+                });
+                ofsDate.setDate(ofsDate.getDate() + frequency);
+            }
         }
 
-        // 仅在起始日生成一个 AI 开始节点的提示，避免每日排程
-        if (aiDrug) {
+        // 2. 生成口服药起始节点
+        if (oralDrug) {
             events.push({
-                title: `${aiDrug.name} 开始口服`,
-                description: '每日口服 1 次',
+                title: `${oralDrug.name} 开始口服`,
+                description: '每日口服一次',
                 date: startDateStr,
                 type: 'endocrine',
                 completed: false,
-                dosageDetails: `${aiDrug.name} ${aiDrug.standardDose}${aiDrug.unit}`
+                dosageDetails: `${oralDrug.name} ${oralDrug.standardDose}${oralDrug.unit}`
+            });
+            // 额外增加每月的维持节点提示
+            let oralMonthDate = new Date(rollingDate.getTime());
+            for (let i = 1; i <= 12; i++) {
+                oralMonthDate.setMonth(oralMonthDate.getMonth() + 1);
+                events.push({
+                    title: `${oralDrug.name} 维持治疗 (M${i})`,
+                    description: '请确认足量服用',
+                    date: formatDate(oralMonthDate),
+                    type: 'endocrine',
+                    completed: false,
+                    dosageDetails: `${oralDrug.name} 每日口服`
+                });
+            }
+        }
+        return;
+      }
+
+      // 3. CDK4/6 抑制剂逻辑
+      if (type === 'cdk46') {
+        events.push({
+            title: `${option.name} 开始口服`,
+            description: option.cycle,
+            date: startDateStr,
+            type: 'cdk46',
+            completed: false,
+            dosageDetails: option.drugs?.map(d => getDoseString(d, true)).join(' + ')
+        });
+        // 生成每28天的随访/领药节点
+        let cdkDate = new Date(rollingDate.getTime());
+        for (let i = 1; i <= 12; i++) {
+            cdkDate.setDate(cdkDate.getDate() + 28);
+            events.push({
+                title: `${option.name} 维持治疗 (周期 ${i + 1})`,
+                description: '注意观察骨髓抑制/腹泻等副作用',
+                date: formatDate(cdkDate),
+                type: 'cdk46',
+                completed: false,
+                dosageDetails: option.drugs?.map(d => getDoseString(d, false)).join(' + ')
             });
         }
         return;
       }
 
-      // 2. 序贯化疗阶段逻辑
+      // 4. 标准周期性治疗 (化疗/靶向)
       if (option.stages && option.stages.length > 0) {
         option.stages.forEach((stage, sIdx) => {
           for (let i = 0; i < stage.cycles; i++) {
@@ -133,27 +172,7 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
             rollingDate.setDate(rollingDate.getDate() + frequency);
           }
         });
-      } 
-      // 3. 每日服用的口服药 (CDK4/6i, AI, TAM)
-      else if (frequency === 1) {
-        // 对于每日服用的药物，仅记录起始节点，或按周期生成概括性节点
-        const cyclesToGenerate = type === 'cdk46' ? 24 : 1; // CDK4/6i 每月一个节点，其他口服药仅记开始
-        
-        for (let i = 0; i < cyclesToGenerate; i++) {
-            const currentEventDate = new Date(rollingDate.getTime());
-            events.push({
-                title: type === 'cdk46' ? `${option.name} (第 ${i + 1} 周期开始)` : `${option.name} 开始治疗`,
-                description: option.cycle,
-                date: formatDate(currentEventDate),
-                type: type as any,
-                completed: false,
-                dosageDetails: option.drugs?.map(drug => getDoseString(drug, i === 0)).join(' + ')
-            });
-            rollingDate.setDate(rollingDate.getDate() + (type === 'cdk46' ? 28 : 1));
-        }
-      } 
-      // 4. 标准周期性治疗 (Anti-HER2, Chemo without stages)
-      else {
+      } else {
         const cyclesToGenerate = option.totalCycles || 1;
         for (let i = 0; i < cyclesToGenerate; i++) {
           const currentEventDate = new Date(rollingDate.getTime());
