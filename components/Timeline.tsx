@@ -26,11 +26,13 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'chemo': return 'bg-red-500';      // 化疗：红色
-      case 'endocrine': return 'bg-blue-500';  // 内分泌：蓝色
+      case 'endocrine': return 'bg-yellow-400';  // 口服内分泌：黄色
+      case 'ofs': return 'bg-blue-500';       // OFS 针剂：蓝色
+      case 'cdk46': return 'bg-purple-500';   // CDK4/6：紫色
       case 'target': return 'bg-green-500';    // 靶向：绿色
       case 'immune': return 'bg-teal-500';     // 免疫：青色
-      case 'surgery': return 'bg-purple-500';  // 手术：紫色
-      case 'exam': return 'bg-yellow-500';     // 检查：黄色
+      case 'surgery': return 'bg-indigo-600';  // 手术：靛蓝
+      case 'exam': return 'bg-cyan-500';       // 检查：蓝绿
       default: return 'bg-gray-400';
     }
   };
@@ -38,8 +40,10 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'chemo': return '化疗';
-      case 'endocrine': return '内分泌治疗';
+      case 'endocrine': return '口服内分泌';
+      case 'ofs': return '卵巢抑制针剂';
       case 'target': return '靶向治疗';
+      case 'cdk46': return 'CDK4/6抑制剂';
       case 'immune': return '免疫治疗';
       case 'surgery': return '手术';
       case 'exam': return '检查';
@@ -100,7 +104,7 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
 
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm h-full flex flex-col relative">
-      {/* 不良反应记录与建议弹窗 */}
+      {/* 不良反应弹窗保持原样 */}
       {activeEvent && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
@@ -127,7 +131,6 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
                           ))}
                       </div>
 
-                      {/* 专家建议区域 (Management Guide) */}
                       {selectedEffects.length > 0 && (
                           <div className="space-y-6 animate-fade-in border-t pt-6">
                               <div className="text-xs font-bold text-medical-600 flex items-center">
@@ -145,13 +148,13 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
                                           </div>
                                           <div className="space-y-3">
                                               <div>
-                                                  <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">应对策略 (Strategies)</div>
+                                                  <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">应对策略</div>
                                                   <ul className="text-xs text-gray-600 space-y-1 list-disc pl-4">
                                                       {guide.strategies.map((s, i) => <li key={i}>{s}</li>)}
                                                   </ul>
                                               </div>
                                               <div>
-                                                  <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">参考药物 (Medications)</div>
+                                                  <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">参考药物</div>
                                                   <div className="flex flex-wrap gap-1">
                                                       {guide.medications.map((m, i) => (
                                                           <span key={i} className="text-[10px] bg-white border border-medical-200 text-medical-700 px-2 py-0.5 rounded-full">{m}</span>
@@ -167,7 +170,7 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
                   </div>
                   <div className="p-4 border-t bg-gray-50 flex gap-3">
                       <button onClick={() => setActiveEvent(null)} className="flex-1 py-2.5 border rounded-lg text-gray-600 text-sm">取消</button>
-                      <button onClick={saveSideEffects} className="flex-1 py-2.5 bg-medical-600 text-white rounded-lg text-sm font-medium shadow-md">保存记录</button>
+                      <button onClick={saveSideEffects} className="flex-1 py-2.5 bg-medical-600 text-white rounded-lg text-sm font-medium shadow-md">保存</button>
                   </div>
               </div>
           </div>
@@ -188,7 +191,9 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
                 <label className="block text-xs font-medium text-gray-700 mb-1">类型</label>
                 <select className="w-full rounded border p-2 text-sm" value={newEvent.type} onChange={e => setNewEvent({...newEvent, type: e.target.value as any})}>
                     <option value="chemo">化疗</option>
-                    <option value="endocrine">内分泌</option>
+                    <option value="endocrine">口服内分泌</option>
+                    <option value="ofs">卵巢抑制针剂</option>
+                    <option value="cdk46">CDK4/6抑制剂</option>
                     <option value="target">靶向</option>
                     <option value="exam">检查</option>
                     <option value="surgery">手术</option>
@@ -222,10 +227,9 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
                     const isSelected = selectedDateStr === dateString;
                     const isToday = new Date().toISOString().split('T')[0] === dateString;
                     const dayEvents = eventsByDate[dateString] || [];
-                    const hasSideEffects = dayEvents.some(e => e.sideEffects && e.sideEffects.length > 0);
 
                     return (
-                        <div key={d} onClick={() => setSelectedDateStr(dateString)} className={`h-12 rounded-lg flex flex-col items-center justify-start pt-1 cursor-pointer transition-all border ${isSelected ? 'bg-medical-50 border-medical-500' : isToday ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-transparent'} ${hasSideEffects ? 'ring-1 ring-red-300' : ''}`}>
+                        <div key={d} onClick={() => setSelectedDateStr(dateString)} className={`h-12 rounded-lg flex flex-col items-center justify-start pt-1 cursor-pointer transition-all border ${isSelected ? 'bg-medical-50 border-medical-500 shadow-sm scale-105' : isToday ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-transparent'}`}>
                             <span className={`text-sm font-medium ${isToday ? 'text-yellow-700' : 'text-gray-700'}`}>{d}</span>
                             <div className="flex gap-0.5 mt-1 flex-wrap justify-center px-1">
                                 {dayEvents.slice(0, 4).map((evt, i) => (
@@ -241,34 +245,26 @@ export const Timeline: React.FC<TimelineProps> = ({ patient, onAddEvent, onUpdat
       )}
       
       <div className="flex-1 overflow-y-auto min-h-[200px]">
-         {viewMode === 'calendar' && <div className="mb-3 px-1 text-sm text-gray-500 font-medium border-b pb-2">{selectedDateStr} 的日程 ({displayedEvents.length})</div>}
+         {viewMode === 'calendar' && <div className="mb-3 px-1 text-sm text-gray-500 font-medium border-b pb-2">{selectedDateStr} 日程记录 ({displayedEvents.length})</div>}
          <div className="relative border-l-2 border-gray-100 ml-3 space-y-6 pb-4">
             {displayedEvents.map((event) => (
-            <div key={event.id} className="relative ml-6">
-                <span className={`absolute -left-[31px] top-1 h-4 w-4 rounded-full border-2 border-white ${getTypeColor(event.type)}`}></span>
+            <div key={event.id} className="relative ml-6 animate-fade-in">
+                <span className={`absolute -left-[31px] top-1 h-4 w-4 rounded-full border-2 border-white shadow-sm ${getTypeColor(event.type)}`}></span>
                 <div className="flex justify-between items-start">
                     <div>
                          {viewMode === 'list' && <span className="text-xs text-gray-400 block">{event.date}</span>}
                          <h4 className="text-sm font-bold text-gray-900">{event.title}</h4>
-                         <p className="text-[10px] text-gray-400 uppercase tracking-wide">{getTypeLabel(event.type)}</p>
+                         <p className="text-[10px] text-gray-400 uppercase tracking-wide font-bold">{getTypeLabel(event.type)}</p>
                     </div>
                     {onUpdateEvent && (
                         <button onClick={() => openSideEffectModal(event)} className={`text-[10px] border px-1.5 py-0.5 rounded font-bold transition-colors ${event.sideEffects && event.sideEffects.length > 0 ? 'bg-red-500 text-white border-red-500' : 'text-medical-600 border-medical-200'}`}>不良反应</button>
                     )}
                 </div>
-                {event.dosageDetails && <div className="mt-1.5 text-[10px] bg-blue-50 text-blue-700 p-1.5 rounded font-mono">{event.dosageDetails}</div>}
+                {event.dosageDetails && <div className="mt-1.5 text-[10px] bg-blue-50 text-blue-700 p-1.5 rounded font-mono border border-blue-100">{event.dosageDetails}</div>}
                 {event.description && <p className="text-[11px] text-gray-500 mt-1">{event.description}</p>}
-                {event.sideEffects && event.sideEffects.length > 0 && (
-                    <div className="mt-2 bg-red-50 p-2 rounded border border-red-100 animate-fade-in">
-                        <h5 className="text-[9px] font-bold text-red-800 mb-1 uppercase">当前记录症状:</h5>
-                        <div className="flex flex-wrap gap-1">
-                            {event.sideEffects.map((s, idx) => <span key={idx} className="text-[9px] bg-white px-1.5 py-0.5 rounded border border-red-200 text-red-600 font-medium">{s}</span>)}
-                        </div>
-                        <div className="mt-2 text-[8px] text-gray-400 italic">点击上方“不良反应”按钮查看专家建议</div>
-                    </div>
-                )}
             </div>
             ))}
+            {displayedEvents.length === 0 && <div className="ml-6 text-xs text-gray-300 italic">本日无特定治疗安排</div>}
          </div>
       </div>
     </div>
