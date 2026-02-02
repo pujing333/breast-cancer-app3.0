@@ -74,7 +74,7 @@ export const generateLocalTreatmentOptions = (patient: Patient, markers: Clinica
     description: '先行手术明确病理分期，随后依据淋巴结及脉管侵犯情况制定辅助方案。',
     reasoning: !stronglyRecommendNeoadjuvant 
       ? `[指南依据] 早期(cT1N0)或Luminal型患者，首选手术明确分期更符合标准。`
-      : `[临床参考] 若患者保乳意愿弱且肿瘤易于切除，手术优先可快速控制。`,
+      : `[临床参考] 虽然分型较晚，但如患者合并严重内科疾病不能耐受长时间新辅助，首选手术可快速干预。`,
     duration: '1个月(手术) + 4-6个月(化疗) + 5-10年(内分泌)',
     pros: ['病理分期最准确', '迅速切除肿块'],
     cons: ['无法获得药敏反馈'],
@@ -96,8 +96,8 @@ export const generateLocalDetailedRegimens = (
   const isHRPositive = erVal > 0;
   const nStage = getNodeStage(markers.nodeStatus);
   const isMeno = markers.menopause;
-  
-  // 1. 化疗逻辑 (省略部分保持不变...)
+
+  // 1. 化疗逻辑
   if (isHER2) {
     plan.chemoOptions.push({
       id: 'c_tchp', name: 'TCbHP (TCHP) 方案', description: '多西他赛+卡铂+曲帕双靶', cycle: 'q3w × 6', type: 'chemo', recommended: true, totalCycles: 6, frequencyDays: 21, drugs: [{ name: '多西他赛', standardDose: 75, unit: 'mg/m²' }, { name: '卡铂', standardDose: 6, unit: 'AUC' }]
@@ -108,27 +108,24 @@ export const generateLocalDetailedRegimens = (
     });
   }
 
-  // 2. 靶向 (Anti-HER2)
+  // 2. 靶向 (Anti-HER2) - 增加 PHESGO 皮下注射
   if (isHER2) {
     plan.targetOptions.push({
-        id: 't_hp', name: '曲帕双靶 (H+P)', description: 'Anti-HER2 靶向', cycle: 'q3w', type: 'target', recommended: true, totalCycles: 18, frequencyDays: 21, drugs: [{ name: '曲妥珠单抗', standardDose: 6, loadingDose: 8, unit: 'mg/kg' }, { name: '帕妥珠单抗', standardDose: 420, loadingDose: 840, unit: 'mg' }]
+        id: 't_hp_iv', name: '曲帕双靶 (H+P 静脉)', description: '静脉输注 / 标准方案', cycle: 'q3w', type: 'target', recommended: true, totalCycles: 18, frequencyDays: 21, drugs: [{ name: '曲妥珠单抗', standardDose: 6, loadingDose: 8, unit: 'mg/kg' }, { name: '帕妥珠单抗', standardDose: 420, loadingDose: 840, unit: 'mg' }]
+    });
+    plan.targetOptions.push({
+        id: 't_phesgo', name: '曲帕双靶 (PHESGO 皮下)', description: '皮下注射 / 快速便捷', cycle: 'q3w', type: 'target', recommended: false, totalCycles: 18, frequencyDays: 21, drugs: [{ name: 'PHESGO', standardDose: 600, loadingDose: 1200, unit: 'mg' }]
     });
   }
 
-  // 3. CDK4/6 抑制剂 (独立分类)
+  // 3. CDK4/6 抑制剂
   if (isHRPositive) {
-    plan.cdk46Options.push({
-      id: 'cdk_abe', name: '阿贝西利 (Abemaciclib)', description: '高危辅助强化 / 每日口服', cycle: '150mg bid', type: 'cdk46', recommended: true, totalCycles: 730, frequencyDays: 1, drugs: [{ name: '阿贝西利', standardDose: 150, unit: 'mg' }]
-    });
-    plan.cdk46Options.push({
-        id: 'cdk_rib', name: '瑞博西利 (Ribociclib)', description: 'MONALEESA 方案 / 21/7周期', cycle: '600mg qd (21/7)', type: 'cdk46', recommended: false, totalCycles: 24, frequencyDays: 28, drugs: [{ name: '瑞博西利', standardDose: 600, unit: 'mg' }]
-    });
-    plan.cdk46Options.push({
-        id: 'cdk_pal', name: '哌柏西利 (Palbociclib)', description: '标准 21/7 方案 / 每日口服', cycle: '125mg qd (21/7)', type: 'cdk46', recommended: false, totalCycles: 24, frequencyDays: 28, drugs: [{ name: '哌柏西利', standardDose: 125, unit: 'mg' }]
-    });
+    plan.cdk46Options.push({ id: 'cdk_abe', name: '阿贝西利', description: '连续服用', cycle: '150mg bid', type: 'cdk46', recommended: true, totalCycles: 730, frequencyDays: 1, drugs: [{ name: '阿贝西利', standardDose: 150, unit: 'mg' }] });
+    plan.cdk46Options.push({ id: 'cdk_rib', name: '瑞博西利', description: '21/7周期', cycle: '600mg qd (21/7)', type: 'cdk46', recommended: false, totalCycles: 24, frequencyDays: 28, drugs: [{ name: '瑞博西利', standardDose: 600, unit: 'mg' }] });
+    plan.cdk46Options.push({ id: 'cdk_pal', name: '哌柏西利', description: '21/7周期', cycle: '125mg qd (21/7)', type: 'cdk46', recommended: false, totalCycles: 24, frequencyDays: 28, drugs: [{ name: '哌柏西利', standardDose: 125, unit: 'mg' }] });
   }
 
-  // 4. 内分泌 (核心扩充部分)
+  // 4. 内分泌
   if (isHRPositive) {
     const aiDrugs = [
         { name: '来曲唑', dose: 2.5 },
@@ -137,7 +134,6 @@ export const generateLocalDetailedRegimens = (
     ];
 
     if (!isMeno) {
-        // 绝经前：增加戈舍瑞林/亮丙瑞林的 1月/3月 剂型选项
         const ofsVariants = [
             { name: '戈舍瑞林', dose1: 3.6, dose3: 10.8 },
             { name: '亮丙瑞林', dose1: 3.75, dose3: 11.25 }
@@ -145,51 +141,19 @@ export const generateLocalDetailedRegimens = (
 
         ofsVariants.forEach(ofs => {
             aiDrugs.forEach(ai => {
-                // 1月剂型组合
                 plan.endocrineOptions.push({
-                    id: `e_${ofs.name}_1m_${ai.name}`,
-                    name: `${ofs.name}(1月) + ${ai.name}`,
-                    description: `绝经前OFS+AI / 28天一次注射`,
-                    cycle: '28天/针 + 每日口服',
-                    type: 'endocrine',
-                    recommended: ofs.name === '戈舍瑞林' && ai.name === '来曲唑',
-                    totalCycles: 13,
-                    frequencyDays: 28,
-                    drugs: [{ name: ofs.name, standardDose: ofs.dose1, unit: 'mg' }, { name: ai.name, standardDose: ai.dose, unit: 'mg' }]
+                    id: `e_${ofs.name}_1m_${ai.name}`, name: `${ofs.name}(1月) + ${ai.name}`, description: `28天/针`, cycle: '28天/针 + 每日口服', type: 'endocrine', recommended: ofs.name === '戈舍瑞林', totalCycles: 13, frequencyDays: 28, drugs: [{ name: ofs.name, standardDose: ofs.dose1, unit: 'mg' }, { name: ai.name, standardDose: ai.dose, unit: 'mg' }]
                 });
-                // 3月剂型组合
                 plan.endocrineOptions.push({
-                    id: `e_${ofs.name}_3m_${ai.name}`,
-                    name: `${ofs.name}(3月) + ${ai.name}`,
-                    description: `绝经前OFS+AI / 84天一次注射`,
-                    cycle: '84天/针 + 每日口服',
-                    type: 'endocrine',
-                    recommended: false,
-                    totalCycles: 5, // 约1.2年，通常更长，仅作示例
-                    frequencyDays: 84, // 3月剂型关键：84天间隔
-                    drugs: [{ name: ofs.name, standardDose: ofs.dose3, unit: 'mg' }, { name: ai.name, standardDose: ai.dose, unit: 'mg' }]
+                    id: `e_${ofs.name}_3m_${ai.name}`, name: `${ofs.name}(3月) + ${ai.name}`, description: `84天/针`, cycle: '84天/针 + 每日口服', type: 'endocrine', recommended: false, totalCycles: 5, frequencyDays: 84, drugs: [{ name: ofs.name, standardDose: ofs.dose3, unit: 'mg' }, { name: ai.name, standardDose: ai.dose, unit: 'mg' }]
                 });
             });
         });
 
-        // 基础 TAM 选项
-        plan.endocrineOptions.push({
-            id: 'e_tam', name: '他莫昔芬 (TAM)', description: '绝经前基础内分泌', cycle: '20mg qd', type: 'endocrine', recommended: false, totalCycles: 1825, frequencyDays: 1, drugs: [{ name: '他莫昔芬', standardDose: 20, unit: 'mg' }]
-        });
+        plan.endocrineOptions.push({ id: 'e_tam', name: '他莫昔芬 (TAM)', description: '绝经前标准', cycle: '20mg qd', type: 'endocrine', recommended: false, totalCycles: 1825, frequencyDays: 1, drugs: [{ name: '他莫昔芬', standardDose: 20, unit: 'mg' }] });
     } else {
-        // 绝经后：直接提供三种 AI 选项
         aiDrugs.forEach(ai => {
-            plan.endocrineOptions.push({
-                id: `e_post_${ai.name}`,
-                name: `${ai.name} (AI)`,
-                description: '绝经后标准内分泌',
-                cycle: '每日口服',
-                type: 'endocrine',
-                recommended: ai.name === '来曲唑',
-                totalCycles: 1825,
-                frequencyDays: 1,
-                drugs: [{ name: ai.name, standardDose: ai.dose, unit: 'mg' }]
-            });
+            plan.endocrineOptions.push({ id: `e_post_${ai.name}`, name: `${ai.name} (AI)`, description: '绝经后标准', cycle: '每日口服', type: 'endocrine', recommended: ai.name === '来曲唑', totalCycles: 1825, frequencyDays: 1, drugs: [{ name: ai.name, standardDose: ai.dose, unit: 'mg' }] });
         });
     }
   }
