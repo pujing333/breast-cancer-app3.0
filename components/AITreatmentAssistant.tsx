@@ -81,11 +81,13 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           });
         }
       };
-      ['chemoOptions', 'endocrineOptions', 'targetOptions', 'immuneOptions'].forEach(cat => {
+      ['chemoOptions', 'endocrineOptions', 'targetOptions', 'immuneOptions', 'cdk46Options'].forEach(cat => {
         const selId = (selectedRegimens as any)[cat.replace('Options', 'Id')];
-        (planToLock as any)[cat].forEach((opt: RegimenOption) => {
-          if (opt.id === selId) processRegimen(opt);
-        });
+        if (selId) {
+          (planToLock as any)[cat].forEach((opt: RegimenOption) => {
+            if (opt.id === selId) processRegimen(opt);
+          });
+        }
       });
       onSaveDetailedPlan(planToLock, selectedRegimens, true, localMarkers);
     }
@@ -102,9 +104,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     const isSelected = selectedRegimens[typeKey] === opt.id;
     if (isLocked && !isSelected) return null;
 
-    const isAntiHER2 = opt.description?.includes('HER2') || opt.name.includes('曲') || opt.name.includes('帕');
-    const isCDK46 = opt.description?.includes('CDK') || opt.name.includes('阿贝') || opt.name.includes('哌柏');
-
     return (
       <div 
         onClick={() => !isLocked && onSaveDetailedPlan(detailedPlan!, { ...selectedRegimens, [typeKey]: opt.id }, false)}
@@ -113,11 +112,12 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         <div className="flex justify-between items-center mb-1">
           <div className="flex items-center gap-2">
             <span className="font-bold text-sm text-gray-800">{opt.name}</span>
-            {typeKey === 'targetId' && (
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${isAntiHER2 ? 'bg-pink-100 text-pink-600' : isCDK46 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
-                    {isAntiHER2 ? 'Anti-HER2' : isCDK46 ? 'CDK4/6i' : '靶向'}
-                </span>
-            )}
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                opt.type === 'target' ? 'bg-pink-100 text-pink-600' : 
+                opt.type === 'cdk46' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'
+            }`}>
+                {opt.type === 'target' ? 'Anti-HER2' : opt.type === 'cdk46' ? 'CDK4/6i' : opt.type}
+            </span>
           </div>
           {isSelected && isLocked && <span className="text-[9px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded font-bold">已固化</span>}
         </div>
@@ -140,13 +140,11 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     );
   };
 
-  const her2Targets = detailedPlan?.targetOptions.filter(o => o.description?.includes('HER2') || o.name.includes('曲') || o.name.includes('帕')) || [];
-  const cdk46Targets = detailedPlan?.targetOptions.filter(o => o.description?.includes('CDK') || o.name.includes('阿贝') || o.name.includes('哌柏')) || [];
-
   const optionsToCalculate = detailedPlan ? [
     detailedPlan.chemoOptions.find(o => o.id === selectedRegimens.chemoId),
     detailedPlan.endocrineOptions.find(o => o.id === selectedRegimens.endocrineId),
     detailedPlan.targetOptions.find(o => o.id === selectedRegimens.targetId),
+    detailedPlan.cdk46Options.find(o => o.id === selectedRegimens.cdk46Id),
     detailedPlan.immuneOptions.find(o => o.id === selectedRegimens.immuneId)
   ].filter(Boolean) as RegimenOption[] : [];
 
@@ -206,7 +204,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             const sel = options.find(o => o.id === selectedPlanId);
             if (sel) {
               const plan = generateLocalDetailedRegimens(patient, localMarkers, sel);
-              onSaveDetailedPlan(plan, { chemoId: plan.chemoOptions[0]?.id, endocrineId: plan.endocrineOptions[0]?.id, targetId: plan.targetOptions[0]?.id, immuneId: plan.immuneOptions[0]?.id }, false, localMarkers);
+              onSaveDetailedPlan(plan, { chemoId: plan.chemoOptions[0]?.id, endocrineId: plan.endocrineOptions[0]?.id, targetId: plan.targetOptions[0]?.id, cdk46Id: plan.cdk46Options[0]?.id, immuneId: plan.immuneOptions[0]?.id }, false, localMarkers);
             } else {
               alert("请先从上方列表中选择一个治疗路径。");
             }
@@ -218,11 +216,8 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-5 animate-fade-in">
           <h3 className="text-sm font-bold text-gray-800">用药方案细节</h3>
           {detailedPlan.chemoOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">化疗/新辅助</div><div className="space-y-2">{detailedPlan.chemoOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="chemoId" />)}</div></div>)}
-          
-          {her2Targets.length > 0 && (<div><div className="text-[10px] font-bold text-pink-500 mb-2 uppercase">Anti-HER2 靶向治疗</div><div className="space-y-2">{her2Targets.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}</div></div>)}
-          
-          {cdk46Targets.length > 0 && (<div><div className="text-[10px] font-bold text-orange-500 mb-2 uppercase">CDK4/6 抑制剂强化</div><div className="space-y-2">{cdk46Targets.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}</div></div>)}
-          
+          {detailedPlan.targetOptions.length > 0 && (<div><div className="text-[10px] font-bold text-pink-500 mb-2 uppercase">Anti-HER2 靶向治疗</div><div className="space-y-2">{detailedPlan.targetOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}</div></div>)}
+          {detailedPlan.cdk46Options.length > 0 && (<div><div className="text-[10px] font-bold text-orange-500 mb-2 uppercase">CDK4/6 抑制剂强化</div><div className="space-y-2">{detailedPlan.cdk46Options.map(o => <RegimenCard key={o.id} opt={o} typeKey="cdk46Id" />)}</div></div>)}
           {detailedPlan.endocrineOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">常规内分泌</div><div className="space-y-2">{detailedPlan.endocrineOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="endocrineId" />)}</div></div>)}
           
           {optionsToCalculate.length > 0 && (
