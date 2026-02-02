@@ -107,31 +107,32 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     return (
       <div 
         onClick={() => !isLocked && onSaveDetailedPlan(detailedPlan!, { ...selectedRegimens, [typeKey]: opt.id }, false)}
-        className={`p-3 rounded-lg border transition-all ${isSelected ? 'border-medical-500 bg-medical-50 shadow-sm' : 'border-gray-100 bg-white opacity-60'}`}
+        className={`p-3 rounded-lg border transition-all cursor-pointer ${
+            isSelected 
+                ? 'border-medical-500 bg-medical-50 shadow-sm ring-1 ring-medical-200' 
+                : 'border-gray-200 bg-white hover:border-medical-300'
+        }`}
       >
-        <div className="flex justify-between items-center mb-1">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-sm text-gray-800">{opt.name}</span>
-            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                opt.type === 'target' ? 'bg-pink-100 text-pink-600' : 
-                opt.type === 'cdk46' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'
-            }`}>
-                {opt.type === 'target' ? 'Anti-HER2' : opt.type === 'cdk46' ? 'CDK4/6i' : opt.type}
-            </span>
+        <div className="flex justify-between items-start mb-1">
+          <div className="flex flex-col">
+            <span className="font-bold text-sm text-gray-900">{opt.name}</span>
+            <span className="text-[10px] text-gray-500">{opt.description}</span>
           </div>
-          {isSelected && isLocked && <span className="text-[9px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded font-bold">已固化</span>}
+          {isSelected ? (
+              <span className="text-medical-600">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+              </span>
+          ) : (
+              <span className="w-5 h-5 border-2 border-gray-100 rounded-full"></span>
+          )}
         </div>
         
-        <div className="text-[10px] text-gray-500 italic mt-0.5 mb-2">{opt.description}</div>
-
         {isSelected && (
-          <div className="space-y-1 mt-1">
+          <div className="mt-2 pt-2 border-t border-medical-100 space-y-1">
             {(opt.drugs || opt.stages?.[0]?.drugs)?.map((drug, i) => (
-              <div key={i} className="flex flex-col gap-1 bg-white/60 p-1.5 rounded border border-white">
-                <div className="flex justify-between text-[11px]">
-                    <span className="text-gray-600">{drug.name} (用法: {opt.cycle})</span>
-                    <span className={`font-bold ${isLocked ? 'text-green-600' : 'text-medical-600'}`}>{getDoseDisplay(drug, false)}</span>
-                </div>
+              <div key={i} className="flex justify-between text-[11px] items-center">
+                <span className="text-gray-600 font-medium">{drug.name} <span className="text-gray-400 font-normal">({opt.cycle})</span></span>
+                <span className={`font-bold ${isLocked ? 'text-green-600' : 'text-medical-600'}`}>{getDoseDisplay(drug, false)}</span>
               </div>
             ))}
           </div>
@@ -213,12 +214,16 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
       )}
 
       {detailedPlan && (
-        <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-5 animate-fade-in">
-          <h3 className="text-sm font-bold text-gray-800">用药方案细节</h3>
-          {detailedPlan.chemoOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">化疗/新辅助</div><div className="space-y-2">{detailedPlan.chemoOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="chemoId" />)}</div></div>)}
-          {detailedPlan.targetOptions.length > 0 && (<div><div className="text-[10px] font-bold text-pink-500 mb-2 uppercase">Anti-HER2 靶向治疗</div><div className="space-y-2">{detailedPlan.targetOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}</div></div>)}
-          {detailedPlan.cdk46Options.length > 0 && (<div><div className="text-[10px] font-bold text-orange-500 mb-2 uppercase">CDK4/6 抑制剂强化</div><div className="space-y-2">{detailedPlan.cdk46Options.map(o => <RegimenCard key={o.id} opt={o} typeKey="cdk46Id" />)}</div></div>)}
-          {detailedPlan.endocrineOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">常规内分泌</div><div className="space-y-2">{detailedPlan.endocrineOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="endocrineId" />)}</div></div>)}
+        <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-6 animate-fade-in">
+          <h3 className="text-sm font-bold text-gray-800 border-b pb-2">用药方案库</h3>
+          
+          {detailedPlan.chemoOptions.length > 0 && (<div><div className="text-[10px] font-bold text-gray-400 mb-2 uppercase">化疗/新辅助方案</div><div className="grid grid-cols-1 gap-2">{detailedPlan.chemoOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="chemoId" />)}</div></div>)}
+          
+          {detailedPlan.targetOptions.length > 0 && (<div><div className="text-[10px] font-bold text-pink-500 mb-2 uppercase">Anti-HER2 靶向治疗</div><div className="grid grid-cols-1 gap-2">{detailedPlan.targetOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="targetId" />)}</div></div>)}
+          
+          {detailedPlan.cdk46Options.length > 0 && (<div><div className="text-[10px] font-bold text-orange-500 mb-2 uppercase">CDK4/6 抑制剂强化 (可选)</div><div className="grid grid-cols-1 gap-2">{detailedPlan.cdk46Options.map(o => <RegimenCard key={o.id} opt={o} typeKey="cdk46Id" />)}</div></div>)}
+          
+          {detailedPlan.endocrineOptions.length > 0 && (<div><div className="text-[10px] font-bold text-indigo-500 mb-2 uppercase">内分泌治疗 (OFS / AI / TAM)</div><div className="grid grid-cols-1 gap-2 h-64 overflow-y-auto pr-1">{detailedPlan.endocrineOptions.map(o => <RegimenCard key={o.id} opt={o} typeKey="endocrineId" />)}</div></div>)}
           
           {optionsToCalculate.length > 0 && (
             <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
