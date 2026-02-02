@@ -57,13 +57,13 @@ export const generateLocalTreatmentOptions = (patient: Patient, markers: Clinica
     id: 'path_neoadjuvant',
     title: '新辅助系统治疗 → 手术 → 辅助强化',
     iconType: 'chemo',
-    description: '术前先进行系统全身治疗，通过降期评价体内药敏，指导术后精准强化。',
+    description: '术前先进行系统全身治疗，通过降期评估药敏，指导术后精准强化。',
     reasoning: stronglyRecommendNeoadjuvant 
       ? `[指南依据] 针对${isHER2 ? 'HER2+' : 'TNBC'}患者，cT≥2或cN+是新辅助的绝对指征。`
       : `[临床参考] 虽然分期尚早，但考虑到${isHER2 ? 'HER2+' : isTNBC ? '三阴性' : '生物学行为'}，先行新辅助可获取药敏信息。`,
     duration: '6个月(术前) + 12个月(术后)',
-    pros: ['活体药敏评估', '降期保乳', '指导术后Non-pCR强化'],
-    cons: ['治疗周期长', '若方案无效可能导致疾病进展'],
+    pros: ['活体药敏评估', '降期保乳', '指导术后强化'],
+    cons: ['治疗周期长', '若方案无效可能导致进展'],
     recommended: stronglyRecommendNeoadjuvant
   });
 
@@ -73,8 +73,8 @@ export const generateLocalTreatmentOptions = (patient: Patient, markers: Clinica
     iconType: 'surgery',
     description: '先行手术明确病理分期，随后依据淋巴结及脉管侵犯情况制定辅助方案。',
     reasoning: !stronglyRecommendNeoadjuvant 
-      ? `[指南依据] 早期(cT1N0)或Luminal型患者，首选手术明确分期。`
-      : `[临床参考] 若患者保乳意愿弱且肿瘤易于切除，手术优先。`,
+      ? `[指南依据] 早期(cT1N0)或Luminal型患者，首选手术明确分期更符合标准。`
+      : `[临床参考] 若患者保乳意愿弱且肿瘤易于切除，手术优先可快速控制。`,
     duration: '1个月(手术) + 4-6个月(化疗) + 5-10年(内分泌)',
     pros: ['病理分期最准确', '迅速切除肿块'],
     cons: ['无法获得药敏反馈'],
@@ -89,7 +89,7 @@ export const generateLocalDetailedRegimens = (
   markers: ClinicalMarkers,
   highLevelPlan: TreatmentOption
 ): DetailedRegimenPlan => {
-  const plan: DetailedRegimenPlan = { chemoOptions: [], endocrineOptions: [], targetOptions: [], immuneOptions: [] };
+  const plan: DetailedRegimenPlan = { chemoOptions: [], endocrineOptions: [], targetOptions: [], immuneOptions: [], cdk46Options: [] };
   const subtype = patient.subtype;
   const isHER2 = subtype === MolecularSubtype.HER2Positive || (markers.her2Status && markers.her2Status.includes('3+'));
   const erVal = getPercentage(markers.erStatus);
@@ -99,7 +99,7 @@ export const generateLocalDetailedRegimens = (
   const ki67Val = getKi67(markers.ki67);
   const grade = getGrade(markers.histologicalGrade);
 
-  // 1. 化疗方案逻辑
+  // 1. 化疗
   if (isHER2) {
     plan.chemoOptions.push({
       id: 'c_tchp',
@@ -131,7 +131,7 @@ export const generateLocalDetailedRegimens = (
     });
   }
 
-  // 2. 靶向方案逻辑 (Anti-HER2)
+  // 2. 靶向 (Anti-HER2)
   if (isHER2) {
     plan.targetOptions.push({
         id: 't_hp',
@@ -147,38 +147,49 @@ export const generateLocalDetailedRegimens = (
     });
   }
 
-  // 3. CDK4/6 抑制剂 (作为独立分类显示，但在数据结构中放入 targetOptions)
+  // 3. CDK4/6 抑制剂 (独立分类)
   if (isHRPositive) {
-    // 阿贝西利 (辅助/晚期均可)
-    plan.targetOptions.push({
-      id: 't_abe',
+    plan.cdk46Options.push({
+      id: 'cdk_abe',
       name: '阿贝西利 (Abemaciclib)',
-      description: 'CDK4/6 抑制剂 - 连续服用',
+      description: 'CDK4/6i - 连续服用',
       cycle: '150mg bid',
-      type: 'target',
+      type: 'cdk46',
       recommended: nStage >= 1 && !isHER2,
       totalCycles: 730,
       frequencyDays: 1,
-      reasoning: '基于 monarchE 研究，高危辅助推荐连续服用2年。',
+      reasoning: 'monarchE 研究：高危辅助推荐连续服用2年。',
       drugs: [{ name: '阿贝西利', standardDose: 150, unit: 'mg' }]
     });
     
-    // 哌柏西利 (常用于晚期或作为备选)
-    plan.targetOptions.push({
-        id: 't_pal',
+    plan.cdk46Options.push({
+        id: 'cdk_pal',
         name: '哌柏西利 (Palbociclib)',
-        description: 'CDK4/6 抑制剂 - 21/7周期',
-        cycle: '125mg qd (服用21天停7天)',
-        type: 'target',
+        description: 'CDK4/6i - 21/7周期',
+        cycle: '125mg qd (21/7)',
+        type: 'cdk46',
         recommended: false,
-        totalCycles: 24, // 以周期计
+        totalCycles: 24,
         frequencyDays: 28,
-        reasoning: '标准 21/7 方案，主要用于晚期或特定临床研究。',
+        reasoning: '标准 21/7 方案，主要用于晚期。',
         drugs: [{ name: '哌柏西利', standardDose: 125, unit: 'mg' }]
+    });
+
+    plan.cdk46Options.push({
+        id: 'cdk_rib',
+        name: '瑞博西利 (Ribociclib)',
+        description: 'CDK4/6i - 21/7周期',
+        cycle: '600mg qd (21/7)',
+        type: 'cdk46',
+        recommended: false,
+        totalCycles: 24,
+        frequencyDays: 28,
+        reasoning: 'MONALEESA 系列研究证实其在晚期及特定辅助人群中的疗效。',
+        drugs: [{ name: '瑞博西利', standardDose: 600, unit: 'mg' }]
     });
   }
 
-  // 4. 内分泌方案逻辑
+  // 4. 内分泌
   if (isHRPositive) {
     const needOFS = !isMeno && (nStage >= 1 || patient.age < 35);
     if (needOFS) {
@@ -191,7 +202,7 @@ export const generateLocalDetailedRegimens = (
             recommended: true,
             totalCycles: 13,
             frequencyDays: 28,
-            reasoning: 'SOFT/TEXT研究：绝经前高危OFS强化获益。',
+            reasoning: 'SOFT/TEXT研究：绝经前高危OFS强化获益显著。',
             drugs: [{ name: '戈舍瑞林', standardDose: 3.6, unit: 'mg' }, { name: '来曲唑', standardDose: 2.5, unit: 'mg' }]
         });
     } else {
@@ -204,7 +215,7 @@ export const generateLocalDetailedRegimens = (
             recommended: true,
             totalCycles: 1825,
             frequencyDays: 1,
-            reasoning: '指南标准辅助内分泌。',
+            reasoning: '指南标准辅助内分泌方案。',
             drugs: [{ name: isMeno ? '来曲唑' : '他莫昔芬', standardDose: isMeno ? 2.5 : 20, unit: 'mg' }]
         });
     }
