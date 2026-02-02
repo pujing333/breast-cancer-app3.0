@@ -23,9 +23,10 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
 }) => {
   const [startDates, setStartDates] = useState<Record<string, string>>({
     chemo: new Date().toISOString().split('T')[0],
-    endocrine: new Date().toISOString().split('T')[0],
     target: new Date().toISOString().split('T')[0],
-    cdk46: new Date().toISOString().split('T')[0]
+    cdk46: new Date().toISOString().split('T')[0],
+    ofs: new Date().toISOString().split('T')[0],
+    oral: new Date().toISOString().split('T')[0]
   });
   
   const [generatedEvents, setGeneratedEvents] = useState<Omit<TreatmentEvent, 'id'>[]>([]);
@@ -43,53 +44,77 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     const events: Omit<TreatmentEvent, 'id'>[] = [];
     
     selectedOptions.forEach(option => {
-      const type = option.type;
-      const startDateStr = startDates[type] || startDates.chemo;
+      if (option.id === 'cdk_none' || option.id === 'ofs_none') return;
+      
+      let startDateKey = 'chemo';
+      if (option.id.startsWith('c_')) startDateKey = 'chemo';
+      else if (option.id.startsWith('t_')) startDateKey = 'target';
+      else if (option.id.startsWith('cdk_')) startDateKey = 'cdk46';
+      else if (option.id.startsWith('ofs_')) startDateKey = 'ofs';
+      else if (option.id.startsWith('oral_')) startDateKey = 'oral';
+
+      const startDateStr = startDates[startDateKey];
       const [y, m, d] = startDateStr.split('-').map(Number);
       if (isNaN(y)) return;
-      let rollingDate = new Date(y, m - 1, d);
+      let baseRollingDate = new Date(y, m - 1, d);
 
-      // 处理内分泌 (口服药 + 针剂)
-      if (type === 'endocrine') {
-        const ofsDrug = option.drugs?.find(d => d.name.includes('戈舍瑞林') || d.name.includes('亮丙瑞林'));
-        const oralDrug = option.drugs?.find(d => !d.name.includes('戈舍瑞林') && !d.name.includes('亮丙瑞林'));
-        
-        if (ofsDrug) {
-            const frequency = option.frequencyDays || 28;
-            const cycles = frequency > 50 ? 5 : 13;
-            let ofsDate = new Date(rollingDate.getTime());
-            for (let i = 0; i < cycles; i++) {
-                events.push({ title: `${ofsDrug.name} 注射`, description: `第 ${i+1} 周期 (${frequency}天间隔)`, date: formatDate(ofsDate), type: 'endocrine', completed: false, dosageDetails: `${ofsDrug.name} ${ofsDrug.standardDose}mg` });
-                ofsDate.setDate(ofsDate.getDate() + frequency);
-            }
-        }
-        if (oralDrug) {
-            let oralDate = new Date(rollingDate.getTime());
-            for (let i = 0; i < 12; i++) { // 为首年每月生成一个服药节点
-                events.push({ title: `${oralDrug.name} 口服 (M${i+1})`, description: '请确认每日按时服用', date: formatDate(oralDate), type: 'endocrine', completed: false, dosageDetails: `${oralDrug.name} 每日口服` });
-                oralDate.setMonth(oralDate.getMonth() + 1);
-            }
-        }
-        return;
+      // 1. 周期性针剂治疗 (化疗、靶向、OFS)
+      if (option.totalCycles && option.totalCycles > 0 && !option.id.startsWith('cdk_') && !option.id.startsWith('oral_')) {
+          const cycles = option.totalCycles;
+          const freq = option.frequencyDays || 21;
+          const isOFS = option.id.startsWith('ofs_');
+          
+          for (let i = 0; i < cycles; i++) {
+              const currentEventDate = new Date(baseRollingDate.getTime());
+              currentEventDate.setDate(baseRollingDate.getDate() + (i * freq));
+              events.push({ 
+                  title: `${option.name} (C${i+1})`, 
+                  description: isOFS ? '卵巢功能抑制针剂注射' : `${option.description} - 第 ${i+1} 周期`, 
+                  date: formatDate(currentEventDate), 
+                  type: isOFS ? 'ofs' : option.type as any, 
+                  completed: false, 
+                  dosageDetails: option.drugs?.map(dr => `${dr.name} ${dr.lockedDose || (dr.standardDose + dr.unit)}`).join(' + ') 
+              });
+          }
+      } 
+      // 2. 口服 CDK4/6 每日排程 (仅标注用药日)
+      else if (option.id.startsWith('cdk_') && option.id !== 'cdk_none') {
+          const isContinuous = option.id === 'cdk_abe'; 
+          const durationDays = 365; 
+          
+          let cdkRolling = new Date(baseRollingDate.getTime());
+          for (let dIdx = 0; dIdx < durationDays; dIdx++) {
+              const cycleDay = (dIdx % 28) + 1; 
+              const isOnDrug = isContinuous || cycleDay <= 21; 
+
+              if (isOnDrug) {
+                  events.push({ 
+                      title: `口服 ${option.name}`, 
+                      description: `周期 D${cycleDay}`, 
+                      date: formatDate(cdkRolling), 
+                      type: 'cdk46', 
+                      completed: false, 
+                      dosageDetails: option.drugs?.map(dr => `${dr.name} ${dr.lockedDose || (dr.standardDose + dr.unit)}`).join(' ')
+                  });
+              }
+              // 移除了停药日(D22-D28)的标注逻辑
+              cdkRolling.setDate(cdkRolling.getDate() + 1);
+          }
       }
-
-      // 处理 CDK4/6 (口服)
-      if (type === 'cdk46') {
-        let cdkDate = new Date(rollingDate.getTime());
-        for (let i = 0; i < 24; i++) { // 生成2年随访节点
-            events.push({ title: `${option.name} (第 ${i+1} 月)`, description: `每日口服: ${option.cycle}`, date: formatDate(cdkDate), type: 'cdk46', completed: false, dosageDetails: `${option.name} 维持服用` });
-            cdkDate.setDate(cdkDate.getDate() + 28);
-        }
-        return;
-      }
-
-      // 处理化疗/靶向 (周期性)
-      const cycles = option.totalCycles || 1;
-      const freq = option.frequencyDays || 21;
-      for (let i = 0; i < cycles; i++) {
-          const currentEventDate = new Date(rollingDate.getTime());
-          events.push({ title: `${option.name} (C${i+1})`, description: option.cycle, date: formatDate(currentEventDate), type: type as any, completed: false, dosageDetails: option.drugs?.map(d => `${d.name} ${d.lockedDose || (d.standardDose + d.unit)}`).join(' + ') });
-          rollingDate.setDate(rollingDate.getDate() + freq);
+      // 3. 口服内分泌药物 (AI/TAM/EXE)
+      else if (option.id.startsWith('oral_')) {
+          let oralRolling = new Date(baseRollingDate.getTime());
+          for (let i = 0; i < 365; i++) { 
+              events.push({ 
+                  title: `口服 ${option.name}`, 
+                  description: `内分泌维持治疗`, 
+                  date: formatDate(oralRolling), 
+                  type: 'endocrine', 
+                  completed: false, 
+                  dosageDetails: option.drugs?.map(dr => `${dr.name} 每日口服`).join(' ') 
+              });
+              oralRolling.setDate(oralRolling.getDate() + 1);
+          }
       }
     });
     
@@ -98,41 +123,51 @@ export const ScheduleGenerator: React.FC<ScheduleGeneratorProps> = ({
     setIsPreviewing(true);
   };
 
-  const activeTypes = Array.from(new Set(selectedOptions.map(o => o.type)));
+  const categories = [
+    { key: 'chemo', label: '化疗起始' },
+    { key: 'target', label: '靶向起始' },
+    { key: 'cdk46', label: 'CDK4/6 起始' },
+    { key: 'ofs', label: 'OFS 起始' },
+    { key: 'oral', label: '内分泌起始' }
+  ];
 
   return (
     <div className={`mt-6 p-4 rounded-xl border ${isLocked ? 'bg-gray-50 border-gray-100' : 'bg-white border-medical-100 shadow-sm'}`}>
-      <div className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-        <svg className="w-4 h-4 text-medical-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-        分项起始日期设置 (口服药将自动生成月度节点)
-      </div>
-      <div className="space-y-3 mb-5">
-        {activeTypes.map(type => (
-            <div key={type} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg border">
-                <label className="text-[10px] font-bold uppercase text-gray-500 min-w-[100px]">{type === 'chemo' ? '化疗' : type === 'endocrine' ? '内分泌/OFS' : type === 'target' ? '靶向' : 'CDK4/6'}</label>
-                <input type="date" disabled={isLocked} className="p-1.5 text-xs border rounded bg-white" value={startDates[type]} onChange={e => setStartDates({...startDates, [type]: e.target.value})} />
-            </div>
+      <div className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-tight">治疗日程同步设定</div>
+      <div className="grid grid-cols-1 gap-2 mb-5">
+        {categories.map(cat => (
+          <div key={cat.key} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-100">
+            <label className="text-[10px] font-bold text-gray-400 uppercase">{cat.label}</label>
+            <input 
+              type="date" 
+              disabled={isLocked} 
+              className="p-1 text-xs border rounded bg-white outline-none focus:ring-1 focus:ring-medical-500" 
+              value={startDates[cat.key]} 
+              onChange={e => setStartDates({...startDates, [cat.key]: e.target.value})} 
+            />
+          </div>
         ))}
       </div>
       {!isPreviewing ? (
-          <button onClick={handleGenerate} className="w-full py-3 bg-medical-50 text-medical-700 border border-medical-200 rounded-lg text-xs font-bold active:scale-[0.98]">1. 自动计算全周期排程 (含口服)</button>
+          <button onClick={handleGenerate} className="w-full py-3 bg-medical-50 text-medical-700 border border-medical-200 rounded-lg text-xs font-bold active:scale-[0.98]">生成首年治疗日程</button>
       ) : (
           <div className="space-y-3">
-              <div className="max-h-56 overflow-y-auto bg-gray-50 p-2 rounded-lg border text-[10px] space-y-1">
-                  {generatedEvents.map((e, i) => (
-                      <div key={i} className={`bg-white p-2 rounded flex justify-between border-l-4 ${e.type === 'cdk46' ? 'border-orange-400' : e.type === 'endocrine' ? 'border-indigo-400' : 'border-medical-400'}`}>
+              <div className="max-h-64 overflow-y-auto bg-gray-50 p-2 rounded-lg border text-[10px] space-y-1">
+                  <div className="text-gray-400 font-bold mb-2">预览 (前 20 条):</div>
+                  {generatedEvents.slice(0, 20).map((e, i) => (
+                      <div key={i} className="bg-white p-2 rounded flex justify-between border-l-2 border-medical-400 shadow-sm">
                           <span><b>{e.date}</b>: {e.title}</span>
-                          <span className="text-gray-400">{e.dosageDetails}</span>
                       </div>
                   ))}
+                  {generatedEvents.length > 20 && <div className="text-center text-gray-300 py-1">... 更多记录已准备就绪 ...</div>}
               </div>
               <div className="flex gap-2">
-                  <button onClick={() => setIsPreviewing(false)} className="flex-1 py-2 rounded-lg text-xs font-bold bg-gray-100">返回修改</button>
-                  <button onClick={() => { onSaveEvents(generatedEvents); setIsPreviewing(false); setIsSuccess(true); setTimeout(() => setIsSuccess(false), 3000); }} className="flex-1 py-2 bg-medical-600 text-white rounded-lg text-xs font-bold">2. 写入患者时间轴</button>
+                  <button onClick={() => setIsPreviewing(false)} className="flex-1 py-2.5 rounded-lg text-xs font-bold bg-gray-100 text-gray-500">修改</button>
+                  <button onClick={() => { onSaveEvents(generatedEvents); setIsPreviewing(false); setIsSuccess(true); setTimeout(() => setIsSuccess(false), 3000); }} className="flex-1 py-2.5 bg-medical-600 text-white rounded-lg text-xs font-bold shadow-md">保存并同步</button>
               </div>
           </div>
       )}
-      {isSuccess && <div className="mt-2 p-2 bg-green-50 text-green-700 text-xs font-bold rounded text-center">日程已同步至患者档案！</div>}
+      {isSuccess && <div className="mt-2 p-2 bg-green-50 text-green-700 text-xs font-bold rounded text-center animate-fade-in">日程已更新</div>}
     </div>
   );
 };
