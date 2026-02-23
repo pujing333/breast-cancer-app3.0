@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Patient, ClinicalMarkers, TreatmentOption, DetailedRegimenPlan, RegimenOption, SelectedRegimens, TreatmentEvent, DrugDetail } from '../types';
 import { generateLocalTreatmentOptions, generateLocalDetailedRegimens, inferMolecularSubtype, inferClinicalStage } from '../services/localMedicalRules';
@@ -23,7 +22,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   onBatchAddEvents
 }) => {
   // 确保 localMarkers 始终有初始值，防止 uncontrolled component 警告
-  // Fix: Provided a valid default ClinicalMarkers object instead of {} to satisfy TypeScript.
   const [localMarkers, setLocalMarkers] = useState<ClinicalMarkers>(patient.markers || {
     erStatus: '',
     prStatus: '',
@@ -50,7 +48,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   const selectedRegimens = patient.selectedRegimens || {};
   const options = patient.treatmentOptions || [];
 
-  // 使用 useCallback 稳定函数引用，防止 DosageCalculator 产生无限循环
   const handleUpdateMarkerField = useCallback((field: keyof ClinicalMarkers, value: any) => {
     if (isLocked) return;
     setLocalMarkers(prev => {
@@ -201,7 +198,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     ].filter(Boolean) as RegimenOption[];
   }, [detailedPlan, selectedRegimens]);
 
-  // 安全处理 Ki67 的显示值
   const ki67DisplayValue = (localMarkers.ki67 || '').toString().replace('%', '').replace('待查', '');
 
   return (
@@ -210,10 +206,21 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         <h3 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-widest">核心临床指标录入</h3>
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">ER 状态</label>
-            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.erStatus || ''} onChange={handleInputChange('erStatus')}><option value="">待录入</option><option value="0%">0%</option><option value="1%-10%">1%-10%</option><option value="10%-50%">10%-50%</option><option value=">50%">&gt;50%</option></select>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.erStatus || ''} onChange={handleInputChange('erStatus')}>
+              <option value="">待录入</option>
+              <option value="0%">0%</option>
+              <option value="1%-10%">1%-10%</option>
+              <option value="10%-50%">10%-50%</option>
+              <option value=">50%">&gt;50%</option>
+            </select>
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">PR 状态</label>
-            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.prStatus || ''} onChange={handleInputChange('prStatus')}><option value="">待录入</option><option value="0%">0%</option><option value="1%-10%">1%-10%</option><option value=">10%">&gt;10%</option></select>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.prStatus || ''} onChange={handleInputChange('prStatus')}>
+              <option value="">待录入</option>
+              <option value="0%">0%</option>
+              <option value="1%-10%">1%-10%</option>
+              <option value=">10%">&gt;10%</option>
+            </select>
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">HER2 状态</label>
             <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.her2Status || ''} onChange={handleInputChange('her2Status')}><option value="">待录入</option><option value="0">0</option><option value="1+">1+</option><option value="2+">2+</option><option value="3+">3+</option></select>
@@ -231,10 +238,21 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.menopause ? 'yes' : 'no'} onChange={(e) => handleUpdateMarkerField('menopause', e.target.value === 'yes')}><option value="no">绝经前</option><option value="yes">绝经后</option></select>
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">cT (分期)</label>
-            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.tumorSize || ''} onChange={handleInputChange('tumorSize')}><option value="">待选</option><option value="T1(≤2cm)">T1 (≤2cm)</option><option value="T2(2-5cm)">T2 (2-5cm)</option><option value="T3(>5cm)">T3 (>5cm)</option></select>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.tumorSize || ''} onChange={handleInputChange('tumorSize')}>
+              <option value="">待选</option>
+              <option value="T1(≤2cm)">T1 (&le;2cm)</option>
+              <option value="T2(2-5cm)">T2 (2-5cm)</option>
+              <option value="T3(>5cm)">T3 (&gt;5cm)</option>
+            </select>
           </div>
           <div className="col-span-2"><label className="text-[10px] text-gray-400 font-bold mb-1 block">cN (淋巴结情况)</label>
-            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.nodeStatus || ''} onChange={handleInputChange('nodeStatus')}><option value="">待选</option><option value="N0(阴性)">N0 (阴性)</option><option value="N1(1-3个)">N1 (1-3个)</option><option value="N2(4-9个)">N2 (4-9个)</option><option value="N3(≥10个)">N3 (≥10个)</option></select>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.nodeStatus || ''} onChange={handleInputChange('nodeStatus')}>
+              <option value="">待选</option>
+              <option value="N0(阴性)">N0 (阴性)</option>
+              <option value="N1(1-3个)">N1 (1-3个)</option>
+              <option value="N2(4-9个)">N2 (4-9个)</option>
+              <option value="N3(≥10个)">N3 (&ge;10个)</option>
+            </select>
           </div>
         </div>
         {!isLocked && (
