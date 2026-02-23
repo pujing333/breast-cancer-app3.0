@@ -340,4 +340,3 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     </div>
   );
 };
-
