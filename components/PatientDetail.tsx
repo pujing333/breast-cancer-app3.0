@@ -17,6 +17,11 @@ type Tab = 'overview' | 'treatment' | 'timeline';
 export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, onUpdatePatient }) => {
   const [activeTab, setActiveTab] = useState<Tab>('treatment');
 
+  const calculateBSAValue = (h?: number, w?: number) => {
+    if (h && w) return (0.0061 * h + 0.0128 * w - 0.1529).toFixed(2);
+    return '--';
+  };
+
   const handleBatchAddEvents = (events: Omit<TreatmentEvent, 'id'>[]) => {
     const newEvents = events.map(evt => ({
       ...evt,
@@ -90,9 +95,7 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
   const handleExportGuide = () => {
     const inferredSubtype = inferMolecularSubtype(patient.markers);
     const inferredStage = inferClinicalStage(patient.markers);
-    const bsa = (patient.height && patient.weight) 
-      ? (0.0061 * patient.height + 0.0128 * patient.weight - 0.1529).toFixed(2) 
-      : '--';
+    const bsa = calculateBSAValue(patient.height, patient.weight);
 
     let html = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -108,7 +111,6 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
           .val { text-align: left; padding-left: 6pt; }
           .check-box { font-family: "DejaVu Sans", "Arial Unicode MS"; font-size: 14pt; text-align: center; width: 30pt; }
           .page-break { page-break-before: always; }
-          .small-text { font-size: 8pt; color: #666; }
           .item-list { font-size: 8pt; text-align: left; line-height: 1.1; }
           .center { text-align: center; }
         </style>
@@ -243,6 +245,7 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>身高: {patient.height || '--'} cm</div>
                 <div>体重: {patient.weight || '--'} kg</div>
+                <div>BSA: {calculateBSAValue(patient.height, patient.weight)} m²</div>
                 <div className="col-span-2">诊断: {patient.diagnosis}</div>
              </div>
           </div>
