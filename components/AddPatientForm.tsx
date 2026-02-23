@@ -21,8 +21,7 @@ export const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSave, onCancel
     weight: '',
     phone: '',
     address: '',
-    occupation: '',
-    histologicalGrade: ''
+    occupation: ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -47,8 +46,9 @@ export const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSave, onCancel
           ki67: '', 
           tumorSize: '', 
           nodeStatus: '', 
-          histologicalGrade: formData.histologicalGrade, 
-          menopause: false
+          histologicalGrade: '', 
+          menopause: false,
+          serumCreatinine: ''
       },
       timeline: []
     });
@@ -128,28 +128,6 @@ export const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSave, onCancel
             </div>
 
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">职业</label>
-                <input 
-                    type="text" 
-                    placeholder="可选"
-                    className="w-full rounded-lg border-gray-300 border p-2.5 text-sm focus:ring-2 focus:ring-medical-500 focus:border-medical-500 outline-none"
-                    value={formData.occupation}
-                    onChange={e => setFormData({...formData, occupation: e.target.value})}
-                />
-            </div>
-
-            <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">居住地址</label>
-                <input 
-                    type="text" 
-                    placeholder="可选"
-                    className="w-full rounded-lg border-gray-300 border p-2.5 text-sm focus:ring-2 focus:ring-medical-500 focus:border-medical-500 outline-none"
-                    value={formData.address}
-                    onChange={e => setFormData({...formData, address: e.target.value})}
-                />
-            </div>
-
-            <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">住院号 / MRN <span className="text-red-500">*</span></label>
                 <input 
                     type="text" required
@@ -171,7 +149,7 @@ export const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSave, onCancel
                 />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">分子分型</label>
                     <select 
@@ -184,23 +162,10 @@ export const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSave, onCancel
                         ))}
                     </select>
                 </div>
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">组织学分级</label>
-                    <select 
-                        className="w-full rounded-lg border-gray-300 border p-2.5 text-sm focus:ring-2 focus:ring-medical-500 focus:border-medical-500 outline-none bg-white"
-                        value={formData.histologicalGrade}
-                        onChange={e => setFormData({...formData, histologicalGrade: e.target.value})}
-                    >
-                         <option value="">未知</option>
-                         <option value="G1">G1 (高分化)</option>
-                         <option value="G2">G2 (中分化)</option>
-                         <option value="G3">G3 (低分化)</option>
-                    </select>
-                </div>
             </div>
 
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">当前治疗阶段</label>
+                <label className="block text-sm font-bold text-gray-700 mb-1">当前阶段</label>
                 <select 
                     className="w-full rounded-lg border-gray-300 border p-2.5 text-sm focus:ring-2 focus:ring-medical-500 focus:border-medical-500 outline-none bg-white"
                     value={formData.stage}
@@ -215,12 +180,11 @@ export const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSave, onCancel
             <div className="pt-4 pb-4">
                 <button 
                     type="submit" 
-                    className="w-full bg-medical-600 text-white py-3.5 rounded-xl shadow-lg text-base font-bold hover:bg-medical-700 active:scale-[0.98] transition-all"
+                    className="w-full bg-medical-600 text-white py-3.5 rounded-xl shadow-lg text-base font-bold active:scale-[0.98] transition-all"
                 >
                     确认添加
                 </button>
             </div>
-
         </form>
       </div>
     </div>
