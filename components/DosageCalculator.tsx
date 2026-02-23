@@ -1,12 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RegimenOption, DrugDetail } from '../types';
 
 interface DosageCalculatorProps {
     options: RegimenOption[];
     initialHeight?: number;
     initialWeight?: number;
-    onUpdateStats: (h: number, w: number) => void;
+    onUpdateStats?: (h: number, w: number) => void;
     patientAge?: number;
     scr?: string;
     isLocked?: boolean;
@@ -24,14 +24,23 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
     const [height, setHeight] = useState<string>(initialHeight ? initialHeight.toString() : '');
     const [weight, setWeight] = useState<string>(initialWeight ? initialWeight.toString() : '');
     const [bsa, setBsa] = useState<number>(0);
+    
+    // 使用 Ref 记录上一次向上传递的值，防止重复汇报导致的无限循环
+    const lastReported = useRef({ h: 0, w: 0 });
 
     useEffect(() => {
         const h = parseFloat(height);
         const w = parseFloat(weight);
-        if (h > 0 && w > 0) {
+        if (!isNaN(h) && !isNaN(w) && h > 0 && w > 0) {
             let calculatedBsa = 0.0061 * h + 0.0128 * w - 0.1529;
-            setBsa(Math.max(0, Number(calculatedBsa.toFixed(2))));
-            onUpdateStats(h, w);
+            const finalBsa = Math.max(0, Number(calculatedBsa.toFixed(2)));
+            setBsa(finalBsa);
+
+            // 只有当值真的发生变化，且父组件提供了回调时才汇报
+            if (onUpdateStats && (h !== lastReported.current.h || w !== lastReported.current.w)) {
+                lastReported.current = { h, w };
+                onUpdateStats(h, w);
+            }
         }
     }, [height, weight, onUpdateStats]);
 
@@ -40,7 +49,6 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({
         if (type === 'loading' && drug.lockedLoadingDose) return drug.lockedLoadingDose;
 
         const w = parseFloat(weight);
-        const h = parseFloat(height);
         let val: number | null = null;
         const doseToUse = (type === 'loading' && drug.loadingDose) ? drug.loadingDose : drug.standardDose;
         const unit = drug.unit.toLowerCase();
