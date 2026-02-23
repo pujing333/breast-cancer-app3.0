@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Patient, ClinicalMarkers, TreatmentOption, DetailedRegimenPlan, RegimenOption, SelectedRegimens, TreatmentEvent, DrugDetail } from '../types';
 import { generateLocalTreatmentOptions, generateLocalDetailedRegimens, inferMolecularSubtype, inferClinicalStage } from '../services/localMedicalRules';
 import { DosageCalculator } from './DosageCalculator';
@@ -22,12 +22,23 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   onUpdatePatientStats,
   onBatchAddEvents
 }) => {
-  const [localMarkers, setLocalMarkers] = useState<ClinicalMarkers>(patient.markers);
+  // 确保 localMarkers 始终有初始值，防止 uncontrolled component 警告
+  // Fix: Provided a valid default ClinicalMarkers object instead of {} to satisfy TypeScript.
+  const [localMarkers, setLocalMarkers] = useState<ClinicalMarkers>(patient.markers || {
+    erStatus: '',
+    prStatus: '',
+    her2Status: '',
+    ki67: '',
+    tumorSize: '',
+    nodeStatus: '',
+    histologicalGrade: '',
+    menopause: false
+  });
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>(patient.selectedPlanId);
   const [analysisSummary, setAnalysisSummary] = useState<{ subtype: string, stage: string } | null>(null);
   
   useEffect(() => {
-    setLocalMarkers(patient.markers);
+    if (patient.markers) setLocalMarkers(patient.markers);
   }, [patient.markers]);
 
   useEffect(() => {
@@ -39,24 +50,27 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   const selectedRegimens = patient.selectedRegimens || {};
   const options = patient.treatmentOptions || [];
 
-  const handleUpdateMarkerField = (field: keyof ClinicalMarkers, value: any) => {
+  // 使用 useCallback 稳定函数引用，防止 DosageCalculator 产生无限循环
+  const handleUpdateMarkerField = useCallback((field: keyof ClinicalMarkers, value: any) => {
     if (isLocked) return;
-    const newMarkers = { ...localMarkers, [field]: value };
-    setLocalMarkers(newMarkers);
-    onUpdateMarkers(newMarkers);
-  };
+    setLocalMarkers(prev => {
+      const next = { ...prev, [field]: value };
+      onUpdateMarkers(next);
+      return next;
+    });
+  }, [isLocked, onUpdateMarkers]);
 
-  const handleInputChange = (field: keyof ClinicalMarkers) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = useCallback((field: keyof ClinicalMarkers) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     handleUpdateMarkerField(field, e.target.value);
-  };
+  }, [handleUpdateMarkerField]);
 
-  const handleUpdateSelection = (typeKey: keyof SelectedRegimens, id: string) => {
+  const handleUpdateSelection = useCallback((typeKey: keyof SelectedRegimens, id: string) => {
     if (isLocked || !detailedPlan) return;
     const newSelected = { ...selectedRegimens, [typeKey]: id };
     onSaveDetailedPlan(detailedPlan, newSelected, false, localMarkers);
-  };
+  }, [isLocked, detailedPlan, selectedRegimens, onSaveDetailedPlan, localMarkers]);
 
-  const getDoseDisplay = (drug: DrugDetail, isInitial: boolean = false): string => {
+  const getDoseDisplay = useCallback((drug: DrugDetail, isInitial: boolean = false): string => {
     if (isInitial && drug.lockedLoadingDose) return drug.lockedLoadingDose;
     if (!isInitial && drug.lockedDose) return drug.lockedDose;
     const h = patient.height || 0;
@@ -77,7 +91,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
       } else return "需肌酐";
     } else val = doseToUse;
     return val > 0 ? `${val} mg` : "--";
-  };
+  }, [patient.height, patient.weight, patient.age, localMarkers.serumCreatinine]);
 
   const validateAndAnalyze = () => {
     const missingFields = [];
@@ -114,10 +128,10 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         cdk46Options: 'cdk46Id'
       };
       Object.keys(categoryMap).forEach(cat => {
-        const typeKey = categoryMap[cat];
+        const typeKey = categoryMap[cat as keyof typeof categoryMap];
         const selId = selectedRegimens[typeKey];
         if (selId) {
-          (planToLock as any)[cat].forEach((opt: RegimenOption) => {
+          (planToLock as any)[cat]?.forEach((opt: RegimenOption) => {
             if (opt.id === selId && opt.drugs) {
                 opt.drugs.forEach(d => {
                     d.lockedDose = getDoseDisplay(d, false);
@@ -176,16 +190,19 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     );
   };
 
-  const activeOptions = detailedPlan ? [
-    detailedPlan.chemoOptions.find(o => o.id === selectedRegimens.chemoId),
-    detailedPlan.ofsOptions.find(o => o.id === selectedRegimens.ofsId),
-    detailedPlan.oralEndocrineOptions.find(o => o.id === selectedRegimens.oralEndocrineId),
-    detailedPlan.targetOptions.find(o => o.id === selectedRegimens.targetId),
-    detailedPlan.cdk46Options.find(o => o.id === selectedRegimens.cdk46Id)
-  ].filter(Boolean) as RegimenOption[] : [];
+  const activeOptions = useMemo(() => {
+    if (!detailedPlan) return [];
+    return [
+      detailedPlan.chemoOptions.find(o => o.id === selectedRegimens.chemoId),
+      detailedPlan.ofsOptions.find(o => o.id === selectedRegimens.ofsId),
+      detailedPlan.oralEndocrineOptions.find(o => o.id === selectedRegimens.oralEndocrineId),
+      detailedPlan.targetOptions.find(o => o.id === selectedRegimens.targetId),
+      detailedPlan.cdk46Options.find(o => o.id === selectedRegimens.cdk46Id)
+    ].filter(Boolean) as RegimenOption[];
+  }, [detailedPlan, selectedRegimens]);
 
   // 安全处理 Ki67 的显示值
-  const ki67DisplayValue = (localMarkers.ki67 || '').replace('%', '').replace('待查', '');
+  const ki67DisplayValue = (localMarkers.ki67 || '').toString().replace('%', '').replace('待查', '');
 
   return (
     <div className="space-y-6 pb-20">
@@ -314,7 +331,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                 options={activeOptions} 
                 initialHeight={patient.height} 
                 initialWeight={patient.weight} 
-                onUpdateStats={(h, w) => onUpdatePatientStats?.(h, w)} 
+                onUpdateStats={onUpdatePatientStats} 
                 patientAge={patient.age} 
                 scr={localMarkers.serumCreatinine} 
                 isLocked={isLocked} 
