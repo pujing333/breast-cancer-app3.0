@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Patient, ClinicalMarkers, TreatmentOption, DetailedRegimenPlan, RegimenOption, SelectedRegimens, TreatmentEvent, DrugDetail, MolecularSubtype } from '../types';
+import { Patient, ClinicalMarkers, TreatmentOption, DetailedRegimenPlan, RegimenOption, SelectedRegimens, TreatmentEvent, DrugDetail } from '../types';
 import { generateLocalTreatmentOptions, generateLocalDetailedRegimens, inferMolecularSubtype, inferClinicalStage } from '../services/localMedicalRules';
 import { DosageCalculator } from './DosageCalculator';
 import { ScheduleGenerator } from './ScheduleGenerator';
@@ -46,6 +46,10 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     onUpdateMarkers(newMarkers);
   };
 
+  const handleInputChange = (field: keyof ClinicalMarkers) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    handleUpdateMarkerField(field, e.target.value);
+  };
+
   const handleUpdateSelection = (typeKey: keyof SelectedRegimens, id: string) => {
     if (isLocked || !detailedPlan) return;
     const newSelected = { ...selectedRegimens, [typeKey]: id };
@@ -76,7 +80,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   };
 
   const validateAndAnalyze = () => {
-    // 验证核心指标
     const missingFields = [];
     if (!localMarkers.erStatus) missingFields.push("ER状态");
     if (!localMarkers.her2Status) missingFields.push("HER2状态");
@@ -88,12 +91,10 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
       return;
     }
 
-    // 分析分型与分期
     const subtype = inferMolecularSubtype(localMarkers);
     const stage = inferClinicalStage(localMarkers);
     setAnalysisSummary({ subtype, stage });
 
-    // 生成路径
     const newOpts = generateLocalTreatmentOptions({ ...patient, subtype, markers: localMarkers }, localMarkers);
     onSaveOptions(newOpts, newOpts[0]?.id);
   };
@@ -183,38 +184,40 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     detailedPlan.cdk46Options.find(o => o.id === selectedRegimens.cdk46Id)
   ].filter(Boolean) as RegimenOption[] : [];
 
+  // 安全处理 Ki67 的显示值
+  const ki67DisplayValue = (localMarkers.ki67 || '').replace('%', '').replace('待查', '');
+
   return (
     <div className="space-y-6 pb-20">
-      {/* 临床指标区域 */}
       <section className="p-4 rounded-xl border bg-white shadow-sm border-gray-100">
         <h3 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-widest">核心临床指标录入</h3>
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">ER 状态</label>
-            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.erStatus} onChange={(e) => handleUpdateMarkerField('erStatus', e.target.value)}><option value="">待录入</option><option value="0%">0%</option><option value="1%-10%">1%-10%</option><option value="10%-50%">10%-50%</option><option value=">50%">&gt;50%</option></select>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.erStatus || ''} onChange={handleInputChange('erStatus')}><option value="">待录入</option><option value="0%">0%</option><option value="1%-10%">1%-10%</option><option value="10%-50%">10%-50%</option><option value=">50%">&gt;50%</option></select>
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">PR 状态</label>
-            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.prStatus} onChange={(e) => handleUpdateMarkerField('prStatus', e.target.value)}><option value="">待录入</option><option value="0%">0%</option><option value="1%-10%">1%-10%</option><option value=">10%">&gt;10%</option></select>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.prStatus || ''} onChange={handleInputChange('prStatus')}><option value="">待录入</option><option value="0%">0%</option><option value="1%-10%">1%-10%</option><option value=">10%">&gt;10%</option></select>
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">HER2 状态</label>
-            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.her2Status} onChange={(e) => handleUpdateMarkerField('her2Status', e.target.value)}><option value="">待录入</option><option value="0">0</option><option value="1+">1+</option><option value="2+">2+</option><option value="3+">3+</option></select>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.her2Status || ''} onChange={handleInputChange('her2Status')}><option value="">待录入</option><option value="0">0</option><option value="1+">1+</option><option value="2+">2+</option><option value="3+">3+</option></select>
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">Ki-67 (%)</label>
-            <input type="number" disabled={isLocked} className="w-full p-2.5 text-sm border rounded" value={localMarkers.ki67.replace('%', '')} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} placeholder="30" />
+            <input type="number" disabled={isLocked} className="w-full p-2.5 text-sm border rounded" value={ki67DisplayValue} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} placeholder="30" />
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">组织分级</label>
-            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.histologicalGrade} onChange={(e) => handleUpdateMarkerField('histologicalGrade', e.target.value)}><option value="">待选</option><option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option></select>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.histologicalGrade || ''} onChange={handleInputChange('histologicalGrade')}><option value="">待选</option><option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option></select>
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">血肌酐 Scr (umol/L)</label>
-            <input type="number" disabled={isLocked} className="w-full p-2.5 text-sm border rounded" value={localMarkers.serumCreatinine || ''} onChange={(e) => handleUpdateMarkerField('serumCreatinine', e.target.value)} placeholder="如 70" />
+            <input type="number" disabled={isLocked} className="w-full p-2.5 text-sm border rounded" value={localMarkers.serumCreatinine || ''} onChange={handleInputChange('serumCreatinine')} placeholder="如 70" />
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">绝经状态</label>
             <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.menopause ? 'yes' : 'no'} onChange={(e) => handleUpdateMarkerField('menopause', e.target.value === 'yes')}><option value="no">绝经前</option><option value="yes">绝经后</option></select>
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">cT (分期)</label>
-            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.tumorSize} onChange={(e) => handleUpdateMarkerField('tumorSize', e.target.value)}><option value="">待选</option><option value="T1(≤2cm)">T1 (≤2cm)</option><option value="T2(2-5cm)">T2 (2-5cm)</option><option value="T3(>5cm)">T3 (>5cm)</option></select>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.tumorSize || ''} onChange={handleInputChange('tumorSize')}><option value="">待选</option><option value="T1(≤2cm)">T1 (≤2cm)</option><option value="T2(2-5cm)">T2 (2-5cm)</option><option value="T3(>5cm)">T3 (>5cm)</option></select>
           </div>
           <div className="col-span-2"><label className="text-[10px] text-gray-400 font-bold mb-1 block">cN (淋巴结情况)</label>
-            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.nodeStatus} onChange={(e) => handleUpdateMarkerField('nodeStatus', e.target.value)}><option value="">待选</option><option value="N0(阴性)">N0 (阴性)</option><option value="N1(1-3个)">N1 (1-3个)</option><option value="N2(4-9个)">N2 (4-9个)</option><option value="N3(≥10个)">N3 (≥10个)</option></select>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.nodeStatus || ''} onChange={handleInputChange('nodeStatus')}><option value="">待选</option><option value="N0(阴性)">N0 (阴性)</option><option value="N1(1-3个)">N1 (1-3个)</option><option value="N2(4-9个)">N2 (4-9个)</option><option value="N3(≥10个)">N3 (≥10个)</option></select>
           </div>
         </div>
         {!isLocked && (
@@ -227,7 +230,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         )}
       </section>
 
-      {/* 分析结果展示区 */}
       {analysisSummary && (
         <section className="bg-accent-50 border border-accent-100 p-4 rounded-xl animate-fade-in">
           <h3 className="text-xs font-bold text-accent-700 mb-2 flex items-center">
@@ -247,7 +249,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         </section>
       )}
 
-      {/* 路径确认区 */}
       {!isLocked && options.length > 0 && (
         <section className="space-y-3">
           {options.map(o => (
@@ -275,7 +276,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         </section>
       )}
 
-      {/* 处方详情区 (保持不变) */}
       {detailedPlan && (
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-8 animate-fade-in">
           <h3 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center justify-between">
