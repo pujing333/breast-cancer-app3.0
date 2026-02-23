@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Patient, ClinicalMarkers, TreatmentEvent, DetailedRegimenPlan, SelectedRegimens, RegimenOption } from '../types';
 import { Header } from './Header';
 import { Timeline } from './Timeline';
@@ -22,7 +22,7 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
     return '--';
   };
 
-  const handleBatchAddEvents = (events: Omit<TreatmentEvent, 'id'>[]) => {
+  const handleBatchAddEvents = useCallback((events: Omit<TreatmentEvent, 'id'>[]) => {
     const newEvents = events.map(evt => ({
       ...evt,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
@@ -36,9 +36,9 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
       timeline: [...filteredTimeline, ...newEvents]
     });
     setActiveTab('timeline');
-  };
+  }, [patient, onUpdatePatient]);
 
-  const handleSaveDetailedPlan = (
+  const handleSaveDetailedPlan = useCallback((
     plan: DetailedRegimenPlan, 
     selectedRegimens: SelectedRegimens, 
     isLocked: boolean = false, 
@@ -51,7 +51,15 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
       isPlanLocked: isLocked,
       markers: markersToSave || patient.markers
     });
-  };
+  }, [patient, onUpdatePatient]);
+
+  const handleUpdateMarkers = useCallback((m: ClinicalMarkers) => {
+    onUpdatePatient({...patient, markers: m});
+  }, [patient, onUpdatePatient]);
+
+  const handleUpdateStats = useCallback((h: number, w: number) => {
+    onUpdatePatient({...patient, height: h, weight: w});
+  }, [patient, onUpdatePatient]);
 
   const getSymbol = (type: string) => {
     switch(type) {
@@ -253,10 +261,10 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
         {activeTab === 'treatment' && (
           <AITreatmentAssistant 
             patient={patient}
-            onUpdateMarkers={(m) => onUpdatePatient({...patient, markers: m})}
+            onUpdateMarkers={handleUpdateMarkers}
             onSaveOptions={(o, id) => onUpdatePatient({...patient, treatmentOptions: o, selectedPlanId: id})}
             onSaveDetailedPlan={handleSaveDetailedPlan}
-            onUpdatePatientStats={(h, w) => onUpdatePatient({...patient, height: h, weight: w})}
+            onUpdatePatientStats={handleUpdateStats}
             onBatchAddEvents={handleBatchAddEvents}
           />
         )}
