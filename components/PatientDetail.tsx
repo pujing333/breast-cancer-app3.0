@@ -38,6 +38,11 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
     setActiveTab('timeline');
   }, [patient, onUpdatePatient]);
 
+  const handleUpdateEvent = useCallback((updatedEvent: TreatmentEvent) => {
+    const newTimeline = patient.timeline.map(e => e.id === updatedEvent.id ? updatedEvent : e);
+    onUpdatePatient({ ...patient, timeline: newTimeline });
+  }, [patient, onUpdatePatient]);
+
   const handleSaveDetailedPlan = useCallback((
     plan: DetailedRegimenPlan, 
     selectedRegimens: SelectedRegimens, 
@@ -276,7 +281,11 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onBack, o
                 <button onClick={handleExportCalendar} className="py-3 bg-medical-600 text-white rounded-xl text-xs font-bold shadow">导出治疗月历</button>
               </div>
             )}
-            <Timeline patient={patient} onAddEvent={(e) => onUpdatePatient({...patient, timeline: [...patient.timeline, {...e, id: Date.now().toString()}]})} />
+            <Timeline 
+              patient={patient} 
+              onAddEvent={(e) => onUpdatePatient({...patient, timeline: [...patient.timeline, {...e, id: Date.now().toString()}]})} 
+              onUpdateEvent={handleUpdateEvent}
+            />
           </div>
         )}
       </div>
