@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Patient, ClinicalMarkers, TreatmentOption, DetailedRegimenPlan, RegimenOption, SelectedRegimens, TreatmentEvent, DrugDetail } from '../types';
+import { Patient, ClinicalMarkers, TreatmentOption, DetailedRegimenPlan, RegimenOption, SelectedRegimens, TreatmentEvent, DrugDetail, MolecularSubtype } from '../types';
 import { generateLocalTreatmentOptions, generateLocalDetailedRegimens, inferMolecularSubtype, inferClinicalStage } from '../services/localMedicalRules';
 import { DosageCalculator } from './DosageCalculator';
 import { ScheduleGenerator } from './ScheduleGenerator';
@@ -31,10 +31,12 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     tumorSize: '',
     nodeStatus: '',
     histologicalGrade: '',
-    menopause: false
+    menopause: false,
+    vascularInvasion: '待查',
+    geneScore21: ''
   });
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>(patient.selectedPlanId);
-  const [analysisSummary, setAnalysisSummary] = useState<{ subtype: string, stage: string } | null>(null);
+  const [analysisSummary, setAnalysisSummary] = useState<{ subtype: MolecularSubtype, stage: string } | null>(null);
   const [showSideEffectRef, setShowSideEffectRef] = useState(false);
   const [editingRegimen, setEditingRegimen] = useState<{ typeKey: keyof SelectedRegimens, option: RegimenOption } | null>(null);
   
@@ -248,6 +250,8 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   }, [detailedPlan, selectedRegimens]);
 
   const ki67DisplayValue = (localMarkers.ki67 || '').toString().replace('%', '').replace('待查', '');
+  const currentSubtype = useMemo(() => analysisSummary?.subtype || inferMolecularSubtype(localMarkers), [localMarkers, analysisSummary]);
+  const isLuminal = currentSubtype === MolecularSubtype.LuminalA || currentSubtype === MolecularSubtype.LuminalB;
 
   return (
     <div className="space-y-6 pb-20">
@@ -332,8 +336,12 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">组织分级</label>
             <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.histologicalGrade || ''} onChange={handleInputChange('histologicalGrade')}><option value="">待选</option><option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option></select>
           </div>
-          <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">血肌酐 Scr (umol/L)</label>
-            <input type="number" disabled={isLocked} className="w-full p-2.5 text-sm border rounded" value={localMarkers.serumCreatinine || ''} onChange={handleInputChange('serumCreatinine')} placeholder="如 70" />
+          <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">脉管癌栓 (LVI)</label>
+            <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white font-bold" value={localMarkers.vascularInvasion || '待查'} onChange={handleInputChange('vascularInvasion')}>
+                <option value="待查">待查</option>
+                <option value="阴性">阴性</option>
+                <option value="阳性">阳性 (+)</option>
+            </select>
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">绝经状态</label>
             <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.menopause ? 'yes' : 'no'} onChange={(e) => handleUpdateMarkerField('menopause', e.target.value === 'yes')}><option value="no">绝经前</option><option value="yes">绝经后</option></select>
@@ -346,7 +354,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               <option value="T3(>5cm)">T3 (&gt;5cm)</option>
             </select>
           </div>
-          <div className="col-span-2"><label className="text-[10px] text-gray-400 font-bold mb-1 block">cN (淋巴结情况)</label>
+          <div className={isLuminal ? 'col-span-1' : 'col-span-2'}><label className="text-[10px] text-gray-400 font-bold mb-1 block">cN (淋巴结情况)</label>
             <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.nodeStatus || ''} onChange={handleInputChange('nodeStatus')}>
               <option value="">待选</option>
               <option value="N0(阴性)">N0 (阴性)</option>
@@ -354,6 +362,16 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               <option value="N2(4-9个)">N2 (4-9个)</option>
               <option value="N3(≥10个)">N3 (&ge;10个)</option>
             </select>
+          </div>
+          {isLuminal && (
+            <div>
+              <label className="text-[10px] text-medical-600 font-bold mb-1 block">21基因 RS 评分</label>
+              <input type="number" disabled={isLocked} className="w-full p-2.5 text-sm border-2 border-medical-100 rounded bg-medical-50/30" value={localMarkers.geneScore21 || ''} onChange={handleInputChange('geneScore21')} placeholder="如: 18" />
+            </div>
+          )}
+          <div className="col-span-2">
+            <label className="text-[10px] text-gray-400 font-bold mb-1 block">血肌酐 Scr (umol/L)</label>
+            <input type="number" disabled={isLocked} className="w-full p-2.5 text-sm border rounded" value={localMarkers.serumCreatinine || ''} onChange={handleInputChange('serumCreatinine')} placeholder="如 70" />
           </div>
         </div>
         {!isLocked && (
@@ -381,6 +399,12 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                <span className="text-[10px] text-gray-400 block mb-1">建议临床分期</span>
                <span className="text-sm font-bold text-accent-700">{analysisSummary.stage}</span>
             </div>
+            {isLuminal && !localMarkers.geneScore21 && (
+              <div className="col-span-2 p-2 bg-yellow-50 border border-yellow-100 rounded flex items-center gap-2">
+                 <svg className="w-5 h-5 text-yellow-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
+                 <span className="text-[10px] text-yellow-700">系统提示：符合 CSCO 指南 21 基因检测指征，建议录入评分以辅助判断化疗必要性。</span>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -406,7 +430,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
               if (sel) {
                 const plan = generateLocalDetailedRegimens(patient, localMarkers, sel);
                 onSaveDetailedPlan(plan, { 
-                    chemoId: plan.chemoOptions[0]?.id, 
+                    chemoId: plan.chemoOptions.find(o => o.recommended)?.id || plan.chemoOptions[0]?.id, 
                     targetId: plan.targetOptions[0]?.id,
                     cdk46Id: plan.cdk46Options.find(o => o.recommended)?.id || 'cdk_none',
                     ofsId: plan.ofsOptions.find(o => o.recommended)?.id || 'ofs_none',
