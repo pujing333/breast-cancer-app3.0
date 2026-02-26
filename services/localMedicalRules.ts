@@ -120,12 +120,14 @@ export const generateLocalDetailedRegimens = (
   const grade = markers.histologicalGrade;
   const nStage = getNodeStageVal(markers.nodeStatus);
   const tSize = getTumorSizeVal(markers.tumorSize);
+  const lvi = markers.vascularInvasion === '阳性';
+  const rs = markers.geneScore21 ? parseInt(markers.geneScore21) : null;
 
-  const highRisk = nStage >= 1 || grade === 'G3' || ki67Val >= 20 || tSize >= 2;
+  // 高危复发因素判定 (新增脉管癌栓 LVI)
+  const highRisk = nStage >= 1 || grade === 'G3' || ki67Val >= 20 || tSize >= 2 || lvi;
 
-  // 1. 化疗 + 靶向逻辑 (对标 CSCO 2024)
+  // 1. 化疗逻辑
   if (isHER2) {
-    // 早期低危患者 (T1N0, Stage IA)
     if (tSize === 1 && nStage === 0) {
       plan.chemoOptions.push({ 
           id: 'c_th', 
@@ -136,23 +138,10 @@ export const generateLocalDetailedRegimens = (
           recommended: true, 
           totalCycles: 12, 
           frequencyDays: 7, 
-          reasoning: 'CSCO 2024 推荐：针对 HER2+、T1N0 (Stage IA) 患者的降阶方案 (基于 APT 研究，1A类证据)。',
+          reasoning: 'CSCO 2024 推荐：针对 HER2+、T1N0 (Stage IA) 患者的降阶方案 (APT研究)。',
           drugs: [{ name: '紫杉醇', standardDose: 80, unit: 'mg/m²' }, { name: '曲妥珠单抗', standardDose: 2, loadingDose: 4, unit: 'mg/kg' }] 
       });
-      plan.chemoOptions.push({ 
-          id: 'c_tc', 
-          name: 'TC 方案', 
-          description: '多西他赛+环磷酰胺', 
-          cycle: 'q3w × 4', 
-          type: 'chemo', 
-          recommended: false, 
-          totalCycles: 4, 
-          frequencyDays: 21, 
-          reasoning: '替代方案：对于不愿使用曲妥珠单抗或有心脏禁忌患者考虑。',
-          drugs: [{ name: '多西他赛', standardDose: 75, unit: 'mg/m²' }, { name: '环磷酰胺', standardDose: 600, unit: 'mg/m²' }] 
-      });
     } else {
-      // 中高危患者 (T>=2 或 N+)
       plan.chemoOptions.push({ 
           id: 'c_tchp', 
           name: 'TCbHP (TCHP)', 
@@ -162,33 +151,64 @@ export const generateLocalDetailedRegimens = (
           recommended: true, 
           totalCycles: 6, 
           frequencyDays: 21, 
-          reasoning: 'CSCO 2024 推荐：中高危 HER2+ 标准方案 (基于 TRAIN-2, BCIRG 006, 1A类证据)。',
+          reasoning: 'CSCO 2024 推荐：中高危 HER2+ 标准方案 (1A类证据)。',
           drugs: [{ name: '多西他赛', standardDose: 75, unit: 'mg/m²' }, { name: '卡铂', standardDose: 6, unit: 'AUC' }] 
       });
     }
   } else if (isHRPositive) {
+    // 基于 21 基因评分的决策
+    let chemoRecommended = highRisk;
+    let chemoReasoning = '依据 CSCO：对于高危 Luminal 型的标准方案。';
+    
+    if (rs !== null) {
+        if (isMeno) {
+            // 绝经后 N0/N1 (1-3个)
+            if (rs <= 25) {
+                chemoRecommended = false;
+                chemoReasoning = `21基因 RS=${rs} (≤25)：绝经后 N0-N1a 患者化疗获益极低，建议豁免化疗 (基于 RxPONDER 研究)。`;
+            } else {
+                chemoRecommended = true;
+                chemoReasoning = `21基因 RS=${rs} (>25)：复发风险高，推荐含化疗方案。`;
+            }
+        } else {
+            // 绝经前
+            if (nStage === 0 && rs < 16) {
+                chemoRecommended = false;
+                chemoReasoning = `21基因 RS=${rs} (<16)：绝经前 N0 患者化疗获益不显著，可考虑免除化疗 (基于 TAILORx 研究)。`;
+            } else {
+                chemoRecommended = true;
+                chemoReasoning = `21基因 RS=${rs}：绝经前复发评分提示化疗有潜在获益。`;
+            }
+        }
+    } else if (subtype === MolecularSubtype.LuminalA || (subtype === MolecularSubtype.LuminalB && !highRisk)) {
+        chemoReasoning += ' [建议录入 21 基因评分以明确是否可豁免化疗]';
+    }
+
+    plan.chemoOptions.push({ id: 'c_none', name: '豁免化疗 (仅内分泌)', description: '不使用全身细胞毒化疗', cycle: '无', type: 'chemo', recommended: !chemoRecommended, totalCycles: 0, frequencyDays: 1, reasoning: !chemoRecommended ? chemoReasoning : '' });
+    
     plan.chemoOptions.push({ 
         id: 'c_act', 
         name: 'AC-T 方案', 
         description: '蒽环序贯紫杉', 
         cycle: 'q3w × 8', 
         type: 'chemo', 
-        recommended: highRisk, 
+        recommended: chemoRecommended && highRisk, 
         totalCycles: 8, 
         frequencyDays: 21, 
-        reasoning: 'CSCO 推荐：对于高危 Luminal 型的标准序贯方案。',
+        reasoning: chemoRecommended ? chemoReasoning : '',
         stages: [{ name: 'AC阶段', cycles: 4, drugs: [{ name: '表柔比星', standardDose: 90, unit: 'mg/m²' }, { name: '环磷酰胺', standardDose: 600, unit: 'mg/m²' }] }, { name: 'T阶段', cycles: 4, drugs: [{ name: '多西他赛', standardDose: 75, unit: 'mg/m²' }] }] 
     });
+    
     plan.chemoOptions.push({ 
         id: 'c_tc', 
         name: 'TC 方案', 
         description: '多西他赛+环磷酰胺', 
         cycle: 'q3w × 4', 
         type: 'chemo', 
-        recommended: !highRisk, 
+        recommended: chemoRecommended && !highRisk, 
         totalCycles: 4, 
         frequencyDays: 21, 
-        reasoning: 'CSCO 推荐：对于低危 Luminal 患者，4周期 TC 方案具有良好风险获益比。',
+        reasoning: chemoRecommended ? chemoReasoning : '',
         drugs: [{ name: '多西他赛', standardDose: 75, unit: 'mg/m²' }, { name: '环磷酰胺', standardDose: 600, unit: 'mg/m²' }] 
     });
   }
@@ -196,23 +216,23 @@ export const generateLocalDetailedRegimens = (
   // 2. 靶向强化
   if (isHER2) {
     const needDualTarget = nStage >= 1 || (tSize >= 2);
-    plan.targetOptions.push({ id: 't_hp_iv', name: '曲帕双靶 (静脉)', description: '曲妥珠+帕妥珠', cycle: 'q3w', type: 'target', recommended: needDualTarget, totalCycles: 18, frequencyDays: 21, reasoning: 'APHINITY研究证实淋巴结阳性患者双靶获益显著。', drugs: [{ name: '曲妥珠单抗', standardDose: 6, loadingDose: 8, unit: 'mg/kg' }, { name: '帕妥珠单抗', standardDose: 420, loadingDose: 840, unit: 'mg' }] });
-    plan.targetOptions.push({ id: 't_h_iv', name: '曲妥珠单抗单靶', description: '赫赛汀', cycle: 'q3w', type: 'target', recommended: !needDualTarget, totalCycles: 18, frequencyDays: 21, reasoning: '低危早期患者单靶已足够。', drugs: [{ name: '曲妥珠单抗', standardDose: 6, loadingDose: 8, unit: 'mg/kg' }] });
+    plan.targetOptions.push({ id: 't_hp_iv', name: '曲帕双靶 (静脉)', description: '曲妥珠+帕妥珠', cycle: 'q3w', type: 'target', recommended: needDualTarget, totalCycles: 18, frequencyDays: 21, drugs: [{ name: '曲妥珠单抗', standardDose: 6, loadingDose: 8, unit: 'mg/kg' }, { name: '帕妥珠单抗', standardDose: 420, loadingDose: 840, unit: 'mg' }] });
+    plan.targetOptions.push({ id: 't_h_iv', name: '曲妥珠单抗单靶', description: '赫赛汀', cycle: 'q3w', type: 'target', recommended: !needDualTarget, totalCycles: 18, frequencyDays: 21, drugs: [{ name: '曲妥珠单抗', standardDose: 6, loadingDose: 8, unit: 'mg/kg' }] });
   }
 
   // 3. CDK4/6
   if (isHRPositive) {
-    const monarchERisk = nStage >= 4 || (nStage >= 1 && (grade === 'G3' || ki67Val >= 20));
+    const monarchERisk = nStage >= 4 || (nStage >= 1 && (grade === 'G3' || ki67Val >= 20 || lvi));
     plan.cdk46Options.push({ id: 'cdk_none', name: '不使用', description: '无强化', cycle: '无', type: 'cdk46', recommended: !monarchERisk, totalCycles: 0, frequencyDays: 1 });
-    plan.cdk46Options.push({ id: 'cdk_abe', name: '阿贝西利 (唯择)', description: '连续服用 2年', cycle: '150mg bid', type: 'cdk46', recommended: monarchERisk, totalCycles: 730, frequencyDays: 1, reasoning: '基于 MonarchE 研究的高危强化治疗。', drugs: [{ name: '阿贝西利', standardDose: 150, unit: 'mg' }] });
+    plan.cdk46Options.push({ id: 'cdk_abe', name: '阿贝西利 (唯择)', description: '连续服用 2年', cycle: '150mg bid', type: 'cdk46', recommended: monarchERisk, totalCycles: 730, frequencyDays: 1, reasoning: '依据 MonarchE 研究的高危强化治疗 (包括 LVI+)。', drugs: [{ name: '阿贝西利', standardDose: 150, unit: 'mg' }] });
   }
 
   // 4. 内分泌
   if (isHRPositive) {
     if (!isMeno) {
-        const ofsRecommend = nStage >= 1 || ki67Val >= 20 || (patient.age < 35);
+        const ofsRecommend = nStage >= 1 || ki67Val >= 20 || (patient.age < 35) || lvi;
         plan.ofsOptions.push({ id: 'ofs_none', name: '不使用 OFS', description: '仅口服', cycle: '无', type: 'endocrine', recommended: !ofsRecommend, totalCycles: 0, frequencyDays: 1 });
-        plan.ofsOptions.push({ id: 'ofs_gos_1m', name: '戈舍瑞林 (1月)', description: '28天/针', cycle: '28d/cycle', type: 'endocrine', recommended: ofsRecommend, totalCycles: 13, frequencyDays: 28, reasoning: '基于 SOFT/TEXT 研究的高危绝经前强化。', drugs: [{ name: '戈舍瑞林', standardDose: 3.6, unit: 'mg' }] });
+        plan.ofsOptions.push({ id: 'ofs_gos_1m', name: '戈舍瑞林 (1月)', description: '28天/针', cycle: '28d/cycle', type: 'endocrine', recommended: ofsRecommend, totalCycles: 13, frequencyDays: 28, reasoning: '基于年轻高危患者的 OFS 强化。', drugs: [{ name: '戈舍瑞林', standardDose: 3.6, unit: 'mg' }] });
     }
     plan.oralEndocrineOptions.push({ id: 'oral_let', name: '来曲唑 (AI)', description: '口服', cycle: '2.5mg qd', type: 'endocrine', recommended: isMeno || !isMeno && nStage >= 1, totalCycles: 1825, frequencyDays: 1, drugs: [{ name: '来曲唑', standardDose: 2.5, unit: 'mg' }] });
     plan.oralEndocrineOptions.push({ id: 'oral_tam', name: '他莫昔芬 (TAM)', description: '口服', cycle: '20mg qd', type: 'endocrine', recommended: !isMeno && nStage === 0, totalCycles: 1825, frequencyDays: 1, drugs: [{ name: '他莫昔芬', standardDose: 20, unit: 'mg' }] });
