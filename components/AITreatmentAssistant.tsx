@@ -4,6 +4,7 @@ import { Patient, ClinicalMarkers, TreatmentOption, DetailedRegimenPlan, Regimen
 import { generateLocalTreatmentOptions, generateLocalDetailedRegimens, inferMolecularSubtype, inferClinicalStage } from '../services/localMedicalRules';
 import { DosageCalculator } from './DosageCalculator';
 import { ScheduleGenerator } from './ScheduleGenerator';
+import { COMMON_SIDE_EFFECTS } from '../constants';
 
 interface AITreatmentAssistantProps {
   patient: Patient;
@@ -34,6 +35,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   });
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>(patient.selectedPlanId);
   const [analysisSummary, setAnalysisSummary] = useState<{ subtype: string, stage: string } | null>(null);
+  const [showSideEffectRef, setShowSideEffectRef] = useState(false);
   
   useEffect(() => {
     if (patient.markers) setLocalMarkers(patient.markers);
@@ -394,6 +396,49 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
           )}
         </section>
       )}
+
+      {/* 不良反应查阅知识库 */}
+      <section className="mt-8">
+        <button 
+          onClick={() => setShowSideEffectRef(!showSideEffectRef)}
+          className="w-full flex items-center justify-between p-4 bg-red-50 text-red-700 rounded-xl border border-red-100 shadow-sm"
+        >
+          <div className="flex items-center font-bold text-sm">
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            常见不良反应处理参考手册 (CSCO)
+          </div>
+          <svg className={`w-5 h-5 transition-transform ${showSideEffectRef ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        </button>
+        
+        {showSideEffectRef && (
+          <div className="mt-2 space-y-3 animate-fade-in">
+            {Object.keys(COMMON_SIDE_EFFECTS).map(effect => (
+              <div key={effect} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div className="font-bold text-sm text-gray-800 mb-2 border-b pb-2 flex items-center">
+                  <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                  {effect}
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">应对策略</div>
+                    <ul className="text-xs text-gray-600 space-y-1 list-disc pl-4">
+                      {COMMON_SIDE_EFFECTS[effect].strategies.map((s, i) => <li key={i}>{s}</li>)}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">参考药物</div>
+                    <div className="flex flex-wrap gap-1">
+                      {COMMON_SIDE_EFFECTS[effect].medications.map((m, i) => (
+                        <span key={i} className="text-[10px] bg-red-50 border border-red-100 text-red-600 px-2 py-0.5 rounded-full">{m}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 };
