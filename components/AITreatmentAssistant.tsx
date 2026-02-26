@@ -36,6 +36,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>(patient.selectedPlanId);
   const [analysisSummary, setAnalysisSummary] = useState<{ subtype: string, stage: string } | null>(null);
   const [showSideEffectRef, setShowSideEffectRef] = useState(false);
+  const [editingRegimen, setEditingRegimen] = useState<{ typeKey: keyof SelectedRegimens, option: RegimenOption } | null>(null);
   
   useEffect(() => {
     if (patient.markers) setLocalMarkers(patient.markers);
@@ -68,6 +69,31 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
     const newSelected = { ...selectedRegimens, [typeKey]: id };
     onSaveDetailedPlan(detailedPlan, newSelected, false, localMarkers);
   }, [isLocked, detailedPlan, selectedRegimens, onSaveDetailedPlan, localMarkers]);
+
+  const handleManualEditRegimen = (typeKey: keyof SelectedRegimens, opt: RegimenOption) => {
+    if (isLocked) return;
+    setEditingRegimen({ typeKey, option: JSON.parse(JSON.stringify(opt)) });
+  };
+
+  const saveManualEdit = () => {
+    if (!editingRegimen || !detailedPlan) return;
+    const newPlan = { ...detailedPlan };
+    const categoryMap: Record<string, keyof DetailedRegimenPlan> = {
+        chemoId: 'chemoOptions',
+        ofsId: 'ofsOptions',
+        oralEndocrineId: 'oralEndocrineOptions',
+        targetId: 'targetOptions',
+        cdk46Id: 'cdk46Options'
+    };
+    const category = categoryMap[editingRegimen.typeKey];
+    if (category) {
+        newPlan[category] = (newPlan[category] as RegimenOption[]).map(o => 
+            o.id === editingRegimen.option.id ? editingRegimen.option : o
+        );
+    }
+    onSaveDetailedPlan(newPlan, selectedRegimens, false, localMarkers);
+    setEditingRegimen(null);
+  };
 
   const getDoseDisplay = useCallback((drug: DrugDetail, isInitial: boolean = false): string => {
     if (isInitial && drug.lockedLoadingDose) return drug.lockedLoadingDose;
@@ -167,16 +193,26 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                   : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300 shadow-sm'
               }`}
             >
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-start">
                 <div className="flex flex-col">
                   <span className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-gray-900'}`}>{o.name}</span>
                   <span className={`text-[10px] ${isSelected ? 'text-white/80' : 'text-gray-500'}`}>{o.description} {o.cycle && `(${o.cycle})`}</span>
                 </div>
-                {isSelected && (
-                  <div className="bg-white/20 p-1 rounded-full">
-                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                    {isSelected && !isLocked && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); handleManualEditRegimen(typeKey, o); }}
+                            className="bg-white/20 p-1.5 rounded-lg text-white hover:bg-white/30 transition-colors"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </button>
+                    )}
+                    {isSelected && (
+                      <div className="bg-white/20 p-1 rounded-full">
+                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>
+                      </div>
+                    )}
+                </div>
               </div>
               {isSelected && o.reasoning && (
                 <div className={`mt-1.5 text-[9px] leading-tight ${isSelected ? 'text-white/70 italic' : 'text-gray-400'}`}>
@@ -215,6 +251,58 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
 
   return (
     <div className="space-y-6 pb-20">
+      {/* 专家编辑弹窗 */}
+      {editingRegimen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+                  <div className="p-4 border-b bg-medical-50 flex justify-between items-center">
+                      <h3 className="font-bold text-medical-800">专家方案微调</h3>
+                      <button onClick={() => setEditingRegimen(null)} className="text-gray-400">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                  </div>
+                  <div className="p-5 space-y-4 overflow-y-auto max-h-[70vh]">
+                      <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">方案名称</label>
+                          <input type="text" className="w-full p-2 border rounded-lg text-sm" value={editingRegimen.option.name} onChange={e => setEditingRegimen({...editingRegimen, option: {...editingRegimen.option, name: e.target.value}})} />
+                      </div>
+                      <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">周期描述</label>
+                          <input type="text" className="w-full p-2 border rounded-lg text-sm" value={editingRegimen.option.cycle} onChange={e => setEditingRegimen({...editingRegimen, option: {...editingRegimen.option, cycle: e.target.value}})} />
+                      </div>
+                      <div className="space-y-3">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase">药物及剂量基准</label>
+                          {editingRegimen.option.drugs?.map((drug, idx) => (
+                              <div key={idx} className="p-3 bg-gray-50 rounded-xl space-y-2 border border-gray-100">
+                                  <input type="text" className="w-full p-1.5 border rounded text-xs" placeholder="药物名称" value={drug.name} onChange={e => {
+                                      const newDrugs = [...editingRegimen.option.drugs!];
+                                      newDrugs[idx].name = e.target.value;
+                                      setEditingRegimen({...editingRegimen, option: {...editingRegimen.option, drugs: newDrugs}});
+                                  }} />
+                                  <div className="flex gap-2">
+                                      <input type="number" className="w-1/2 p-1.5 border rounded text-xs" placeholder="剂量" value={drug.standardDose} onChange={e => {
+                                          const newDrugs = [...editingRegimen.option.drugs!];
+                                          newDrugs[idx].standardDose = Number(e.target.value);
+                                          setEditingRegimen({...editingRegimen, option: {...editingRegimen.option, drugs: newDrugs}});
+                                      }} />
+                                      <input type="text" className="w-1/2 p-1.5 border rounded text-xs" placeholder="单位 (mg/m2...)" value={drug.unit} onChange={e => {
+                                          const newDrugs = [...editingRegimen.option.drugs!];
+                                          newDrugs[idx].unit = e.target.value;
+                                          setEditingRegimen({...editingRegimen, option: {...editingRegimen.option, drugs: newDrugs}});
+                                      }} />
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+                  <div className="p-4 border-t bg-gray-50 flex gap-3">
+                      <button onClick={() => setEditingRegimen(null)} className="flex-1 py-3 border rounded-xl text-gray-600 font-bold text-sm">丢弃</button>
+                      <button onClick={saveManualEdit} className="flex-1 py-3 bg-medical-600 text-white rounded-xl font-bold text-sm shadow-md">应用修改</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <section className="p-4 rounded-xl border bg-white shadow-sm border-gray-100">
         <h3 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-widest">核心临床指标录入</h3>
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -333,7 +421,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         <section className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-8 animate-fade-in">
           <h3 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center justify-between">
             <span>处方方案精选 (Button Grid模式)</span>
-            {!isLocked && <span className="text-[10px] text-gray-400 font-normal">点击色块即可完成改选</span>}
+            {!isLocked && <span className="text-[10px] text-gray-400 font-normal">点击右侧编辑图标可微调药物</span>}
           </h3>
           
           <div className="space-y-2">
