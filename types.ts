@@ -27,6 +27,8 @@ histologicalGrade: string;
 menopause: boolean; 
 geneticTestResult?: string; 
 serumCreatinine?: string; 
+vascularInvasion?: '阴性' | '阳性' | '待查'; 
+geneScore21?: string; 
 }
 
 export interface TreatmentEvent {
