@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Patient, ClinicalMarkers, TreatmentOption, DetailedRegimenPlan, RegimenOption, SelectedRegimens, TreatmentEvent, DrugDetail } from '../types';
 import { generateLocalTreatmentOptions, generateLocalDetailedRegimens, inferMolecularSubtype, inferClinicalStage } from '../services/localMedicalRules';
@@ -21,7 +22,6 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
   onUpdatePatientStats,
   onBatchAddEvents
 }) => {
-  // 确保 localMarkers 始终有初始值，防止 uncontrolled component 警告
   const [localMarkers, setLocalMarkers] = useState<ClinicalMarkers>(patient.markers || {
     erStatus: '',
     prStatus: '',
@@ -115,7 +115,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
       alert("请完整录入患者身高、体重以固化剂量。");
       return;
     }
-    if (window.confirm("方案锁定后，计算出的具体剂量将无法更改。是否继续？")) {
+    if (window.confirm("方案锁定后，计算出的具体剂量将固化至日程。确认锁定？")) {
       const planToLock: DetailedRegimenPlan = JSON.parse(JSON.stringify(detailedPlan));
       const categoryMap: Record<string, keyof SelectedRegimens> = {
         chemoOptions: 'chemoId',
@@ -139,6 +139,12 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         }
       });
       onSaveDetailedPlan(planToLock, selectedRegimens, true, localMarkers);
+    }
+  };
+
+  const handleUnlock = () => {
+    if (window.confirm("解除锁定后，剂量将随身高、体重实时变化。确认解除？")) {
+      onSaveDetailedPlan(detailedPlan!, selectedRegimens, false, localMarkers);
     }
   };
 
@@ -170,6 +176,11 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                   </div>
                 )}
               </div>
+              {isSelected && o.reasoning && (
+                <div className={`mt-1.5 text-[9px] leading-tight ${isSelected ? 'text-white/70 italic' : 'text-gray-400'}`}>
+                   依据：{o.reasoning}
+                </div>
+              )}
               {isSelected && o.drugs && o.drugs.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-white/20 space-y-1">
                   {o.drugs.map((d, i) => (
@@ -226,7 +237,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
             <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.her2Status || ''} onChange={handleInputChange('her2Status')}><option value="">待录入</option><option value="0">0</option><option value="1+">1+</option><option value="2+">2+</option><option value="3+">3+</option></select>
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">Ki-67 (%)</label>
-            <input type="number" disabled={isLocked} className="w-full p-2.5 text-sm border rounded" value={ki67DisplayValue} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} placeholder="30" />
+            <input type="number" disabled={isLocked} className="w-full p-2.5 text-sm border rounded" value={ki67DisplayValue} onChange={(e) => handleUpdateMarkerField('ki67', e.target.value + '%')} placeholder="20" />
           </div>
           <div><label className="text-[10px] text-gray-400 font-bold mb-1 block">组织分级</label>
             <select disabled={isLocked} className="w-full p-2.5 text-sm border rounded bg-white" value={localMarkers.histologicalGrade || ''} onChange={handleInputChange('histologicalGrade')}><option value="">待选</option><option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option></select>
@@ -269,7 +280,7 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
         <section className="bg-accent-50 border border-accent-100 p-4 rounded-xl animate-fade-in">
           <h3 className="text-xs font-bold text-accent-700 mb-2 flex items-center">
             <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /><path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" /></svg>
-            诊断分析结果
+            诊断分析结果 (对标 CSCO 2024)
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-white p-2 rounded border border-accent-200 shadow-sm">
@@ -293,6 +304,11 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                 {o.recommended && <span className="bg-orange-100 text-orange-700 text-[9px] px-1.5 py-0.5 rounded font-bold">首选推荐</span>}
               </div>
               <div className="text-[11px] text-gray-500 mt-1">{o.description}</div>
+              {o.reasoning && (
+                <div className="mt-2 p-2 bg-gray-50 border-l-2 border-medical-300 text-[10px] text-gray-500 italic">
+                  指南依据：{o.reasoning}
+                </div>
+              )}
             </div>
           ))}
           <button onClick={() => {
@@ -363,11 +379,17 @@ export const AITreatmentAssistant: React.FC<AITreatmentAssistantProps> = ({
                 scr={localMarkers.serumCreatinine} 
                 isLocked={isLocked} 
               />
-              {!isLocked && (
-                <button onClick={handleConfirmLock} className="w-full py-4 bg-green-600 text-white rounded-xl text-base font-bold shadow-xl active:scale-95 transition-all">
-                  3. 确认方案并固化最终剂量
-                </button>
-              )}
+              <div className="flex gap-3">
+                {isLocked ? (
+                  <button onClick={handleUnlock} className="w-full py-4 bg-gray-500 text-white rounded-xl text-base font-bold shadow-lg active:scale-95 transition-all">
+                    解除剂量锁定 (重新调整)
+                  </button>
+                ) : (
+                  <button onClick={handleConfirmLock} className="w-full py-4 bg-green-600 text-white rounded-xl text-base font-bold shadow-xl active:scale-95 transition-all">
+                    3. 确认方案并固化最终剂量
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </section>
